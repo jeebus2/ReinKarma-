@@ -906,7 +906,9 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
- Howler.html5 = true; // Global setting for Howler to use HTML5 Audio.
+console.log("Firebase initialized successfully");
+alert("Firebase initialized successfully");
+Howler.html5 = true; // Global setting for Howler to use HTML5 Audio.
 
         const sounds = {
             evilEye: new Howl({
