@@ -890,8 +890,6 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
     <script>
-        // Initialize sound effects using Howler.js
-        // Set HTML5 Audio as the preferred method for iOS compatibility, especially for consistent behavior.
       // Firebase Configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBJXHRD2xs75a7icYk8Njygc30LhZFdjtY",
@@ -908,8 +906,11 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 console.log("Firebase initialized successfully");
 alert("Firebase initialized successfully");
-Howler.html5 = true; // Global setting for Howler to use HTML5 Audio.
 
+  // Test alert
+  alert("Firebase initialized successfully");
+        
+Howler.html5 = true; // Global setting for Howler to use HTML5 Audio.
         const sounds = {
             evilEye: new Howl({
                 src: ['https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2F8e83c21b-7e79-4db8-8885-ff3e3fb49a75%2F14669546-e921-49cd-be52-928f871d97db.mp3?alt=media&token=477c62ac-d2ed-4782-8621-c2a0cbe4bb09'],
