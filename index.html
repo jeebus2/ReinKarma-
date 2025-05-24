@@ -581,6 +581,7 @@
                 <br><br>
                 <button id="start-online-button">Start Online Game</button>
             </div>
+<!-- 🔥 Multiplayer Lobby -->
 <div id="lobby-screen" style="display:none; margin-top: 20px;">
   <h2>Lobby</h2>
   <div id="player-list" style="font-size: 1.1rem; color: white;"></div>
@@ -589,9 +590,7 @@
     Start Game
   </button>
 </div>
-        </div>
-    </div>
-    
+            
     <div id="game-container">
         <div id="player-info"></div>
         
@@ -955,7 +954,6 @@ if (joinGameId) {
       const gameData = snapshot.val();
       console.log("Joined game:", joinGameId, gameData);
 
-      // Show "Start Game" button only to the host
       if (window.localPlayerId === gameData.hostId) {
         document.getElementById("start-game-button").style.display = "inline-block";
       }
@@ -973,16 +971,12 @@ if (joinGameId) {
         .then(() => {
           console.log("Player added:", newPlayer);
           alert(`Joined game: ${joinGameId}`);
-
-          // Show the lobby screen
           document.getElementById("lobby-screen").style.display = "block";
           const playerListDiv = document.getElementById("player-list");
 
-          // Live update player list
           db.ref(`/games/${joinGameId}/state/players`).on("value", snapshot => {
             const players = snapshot.val() || {};
             playerListDiv.innerHTML = "";
-
             Object.values(players).forEach(player => {
               const entry = document.createElement("div");
               entry.textContent = `${player.name} (${player.id})`;
@@ -990,7 +984,6 @@ if (joinGameId) {
             });
           });
 
-          // Listen for game start
           db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
             if (snapshot.val() === true) {
               console.log("Game started signal received!");
@@ -999,7 +992,6 @@ if (joinGameId) {
               document.getElementById("start-screen").style.display = "none";
               document.getElementById("game-container").style.display = "block";
 
-              // Track whose turn it is
               db.ref(`/games/${joinGameId}/state/currentPlayerIndex`).on("value", snapshot => {
                 const index = snapshot.val();
                 if (index === null) return;
@@ -1022,30 +1014,29 @@ if (joinGameId) {
         .catch(err => {
           console.error("Failed to add player:", err);
         });
-
     } else {
       alert("Game not found.");
     }
   });
 }
 
-// Start Online Game button
+// 🌐 Multiplayer entry point
+// Simply reveals lobby, lets player choose count
+// Player count click handles actual game creation
+
 document.getElementById("start-online-button").addEventListener("click", () => {
   isMultiplayer = true;
   document.getElementById("start-screen").style.display = "none";
   document.getElementById("lobby-screen").style.display = "block";
 });
 
-// Player count buttons
 document.querySelectorAll(".player-count-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     const playerCount = parseInt(btn.getAttribute("data-players"));
 
     if (!isMultiplayer) {
-      // Hot seat mode
       setupPlayers(playerCount);
     } else {
-      // Multiplayer mode
       const gameId = generateGameId();
       const hostId = generateClientId();
       window.currentGameId = gameId;
@@ -1105,7 +1096,6 @@ document.querySelectorAll(".player-count-btn").forEach(btn => {
   });
 });
 
-// Host clicks "Start Game"
 document.getElementById("start-game-button").addEventListener("click", () => {
   db.ref(`/games/${window.currentGameId}/state/started`).set(true)
     .then(() => {
