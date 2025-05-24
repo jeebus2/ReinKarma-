@@ -941,7 +941,8 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 let isMultiplayer = false;
-        // STEP 3.1 – Check if joining an existing game via URL
+
+// STEP 3.1 – Check if joining an existing game via URL
 const urlParams = new URLSearchParams(window.location.search);
 const joinGameId = urlParams.get("game");
 
@@ -952,77 +953,75 @@ if (joinGameId) {
   db.ref(`/games/${joinGameId}`).once('value').then(snapshot => {
     if (snapshot.exists()) {
       const gameData = snapshot.val();
-console.log("Joined game:", joinGameId, gameData);
-        // Show "Start Game" button only to the host
-if (window.localPlayerId === gameData.hostId) {
-  document.getElementById("start-game-button").style.display = "inline-block";
-}
-const newPlayer = {
-  id: window.localPlayerId,
-  name: prompt("Enter your name:") || "Player",
-  inventory: [],
-  position: 0,
-  credits: 0,
-  isAI: false
-};
+      console.log("Joined game:", joinGameId, gameData);
 
-db.ref(`/games/${joinGameId}/state/players/${window.localPlayerId}`).set(newPlayer)
-  .then(() => {
-    console.log("Player added:", newPlayer);
-    alert(`Joined game: ${joinGameId}`);
+      // Show "Start Game" button only to the host
+      if (window.localPlayerId === gameData.hostId) {
+        document.getElementById("start-game-button").style.display = "inline-block";
+      }
 
-    // Show the lobby screen
-    document.getElementById("lobby-screen").style.display = "block";
-    const playerListDiv = document.getElementById("player-list");
+      const newPlayer = {
+        id: window.localPlayerId,
+        name: prompt("Enter your name:") || "Player",
+        inventory: [],
+        position: 0,
+        credits: 0,
+        isAI: false
+      };
 
- // Listen for real-time updates to the player list
-db.ref(`/games/${joinGameId}/state/players`).on("value", snapshot => {
-  const players = snapshot.val() || {};
-  playerListDiv.innerHTML = ""; // Clear list
+      db.ref(`/games/${joinGameId}/state/players/${window.localPlayerId}`).set(newPlayer)
+        .then(() => {
+          console.log("Player added:", newPlayer);
+          alert(`Joined game: ${joinGameId}`);
 
-  Object.values(players).forEach(player => {
-    const entry = document.createElement("div");
-    entry.textContent = `${player.name} (${player.id})`;
-    playerListDiv.appendChild(entry);
-  });
-});
+          // Show the lobby screen
+          document.getElementById("lobby-screen").style.display = "block";
+          const playerListDiv = document.getElementById("player-list");
 
-// 🔥 Listen for game start signal
-db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
-  if (snapshot.val() === true) {
-    console.log("Game started signal received!");
-document.getElementById("start-game-button").style.display = "none";
-    document.getElementById("lobby-screen").style.display = "none";
-    document.getElementById("start-screen").style.display = "none";
-    document.getElementById("game-container").style.display = "block";
-// 🎯 Monitor whose turn it is
-db.ref(`/games/${joinGameId}/state/currentPlayerIndex`).on("value", snapshot => {
-  const index = snapshot.val();
-  if (index === null) return;
+          // Live update player list
+          db.ref(`/games/${joinGameId}/state/players`).on("value", snapshot => {
+            const players = snapshot.val() || {};
+            playerListDiv.innerHTML = "";
 
-  db.ref(`/games/${joinGameId}/state/players`).once("value").then(playerSnap => {
-    const players = playerSnap.val() || {};
-    const playerArray = Object.values(players);
-    const currentPlayer = playerArray[index];
+            Object.values(players).forEach(player => {
+              const entry = document.createElement("div");
+              entry.textContent = `${player.name} (${player.id})`;
+              playerListDiv.appendChild(entry);
+            });
+          });
 
-    // Show game controls only to the active player
-    if (currentPlayer && currentPlayer.id === window.localPlayerId) {
-      document.getElementById("your-turn-indicator").style.display = "block";
-      // enable dice roll or action buttons here
-    } else {
-      document.getElementById("your-turn-indicator").style.display = "none";
-      // disable dice roll or buttons
-    }
-  });
-});
+          // Listen for game start
+          db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
+            if (snapshot.val() === true) {
+              console.log("Game started signal received!");
+              document.getElementById("start-game-button").style.display = "none";
+              document.getElementById("lobby-screen").style.display = "none";
+              document.getElementById("start-screen").style.display = "none";
+              document.getElementById("game-container").style.display = "block";
 
-  }
-});
-      
-  })
-  .catch(err => {
-    console.error("Failed to add player:", err);
-  });
+              // Track whose turn it is
+              db.ref(`/games/${joinGameId}/state/currentPlayerIndex`).on("value", snapshot => {
+                const index = snapshot.val();
+                if (index === null) return;
+
+                db.ref(`/games/${joinGameId}/state/players`).once("value").then(playerSnap => {
+                  const players = playerSnap.val() || {};
+                  const playerArray = Object.values(players);
+                  const currentPlayer = playerArray[index];
+
+                  if (currentPlayer && currentPlayer.id === window.localPlayerId) {
+                    document.getElementById("your-turn-indicator").style.display = "block";
+                  } else {
+                    document.getElementById("your-turn-indicator").style.display = "none";
+                  }
+                });
+              });
+            }
+          });
+        })
+        .catch(err => {
+          console.error("Failed to add player:", err);
+        });
 
     } else {
       alert("Game not found.");
@@ -1030,15 +1029,83 @@ db.ref(`/games/${joinGameId}/state/currentPlayerIndex`).on("value", snapshot => 
   });
 }
 
-let isMultiplayer = false;
-
+// Start Online Game button
 document.getElementById("start-online-button").addEventListener("click", () => {
   isMultiplayer = true;
   document.getElementById("start-screen").style.display = "none";
   document.getElementById("lobby-screen").style.display = "block";
 });
 
-// 🔘 Host clicks "Start Game"
+// Player count buttons
+document.querySelectorAll(".player-count-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const playerCount = parseInt(btn.getAttribute("data-players"));
+
+    if (!isMultiplayer) {
+      // Hot seat mode
+      setupPlayers(playerCount);
+    } else {
+      // Multiplayer mode
+      const gameId = generateGameId();
+      const hostId = generateClientId();
+      window.currentGameId = gameId;
+      window.localPlayerId = hostId;
+
+      const gameData = {
+        hostId,
+        playerCount,
+        state: {
+          players: {},
+          currentPlayerIndex: 0,
+          board: [],
+          started: false
+        }
+      };
+
+      db.ref(`/games/${gameId}`).set(gameData).then(() => {
+        const newPlayer = {
+          id: hostId,
+          name: "Host",
+          inventory: [],
+          position: 0,
+          credits: 0,
+          isAI: false
+        };
+        return db.ref(`/games/${gameId}/state/players/${hostId}`).set(newPlayer);
+      }).then(() => {
+        const link = `${window.location.origin}?game=${gameId}`;
+        const modal = document.createElement("div");
+        modal.innerHTML = `
+          <div style="position: fixed; top: 20%; left: 50%; transform: translateX(-50%);
+                      background: #222; color: white; padding: 20px; border: 2px solid #888; z-index: 1000;
+                      font-family: sans-serif; text-align: center; width: 300px; border-radius: 10px;">
+            <p><strong>Multiplayer Game Ready!</strong><br>Share this link:</p>
+            <input type="text" value="${link}" readonly style="width: 100%; padding: 5px; margin-bottom: 10px;" id="game-link-input">
+            <button id="copy-link-btn" style="padding: 5px 15px; margin-right: 10px;">Copy Link</button>
+            <button id="close-link-modal" style="padding: 5px 15px;">Close</button>
+          </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById("copy-link-btn").onclick = () => {
+          const input = document.getElementById("game-link-input");
+          input.select();
+          input.setSelectionRange(0, 99999);
+          navigator.clipboard.writeText(input.value);
+          alert("Link copied to clipboard!");
+        };
+
+        document.getElementById("close-link-modal").onclick = () => {
+          modal.remove();
+        };
+      }).catch(err => {
+        console.error("Failed to create multiplayer game:", err);
+      });
+    }
+  });
+});
+
+// Host clicks "Start Game"
 document.getElementById("start-game-button").addEventListener("click", () => {
   db.ref(`/games/${window.currentGameId}/state/started`).set(true)
     .then(() => {
