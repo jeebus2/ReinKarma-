@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -577,6 +578,8 @@
                 <button class="player-count-btn" data-players="3">3</button>
                 <button class="player-count-btn" data-players="4">4</button>
                 <button class="player-count-btn" data-players="5">5</button>
+                <br><br>
+                <button id="start-online-button">Start Online Game</button>
             </div>
         </div>
     </div>
@@ -901,7 +904,20 @@
         // Initialize sound effects using Howler.js
         // Set HTML5 Audio as the preferred method for iOS compatibility, especially for consistent behavior.
         Howler.html5 = true; // Global setting for Howler to use HTML5 Audio.
-        
+
+        function generateGameId() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let id = '';
+  for (let i = 0; i < 6; i++) {
+    id += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return id;
+}
+
+function generateClientId() {
+  return 'client-' + Math.random().toString(36).substr(2, 9);
+}
+
 // 🔥 Initialize Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyBJXHRD2xs75a7icYk8Njygc30LhZFdjtY",
@@ -914,7 +930,35 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
-        
+
+        document.getElementById("start-online-button").addEventListener("click", () => {
+  const gameId = generateGameId();
+  const hostId = generateClientId();
+
+  // Store for later
+  window.currentGameId = gameId;
+  window.localPlayerId = hostId;
+
+  // Save basic game object
+  const gameData = {
+    hostId,
+    state: {
+      players: [],
+      currentPlayerIndex: 0,
+      board: [],
+      started: false
+    }
+  };
+
+  db.ref(`/games/${gameId}`).set(gameData)
+    .then(() => {
+      alert(`Game created!\nShare this link:\n${window.location.origin}?game=${gameId}`);
+    })
+    .catch(err => {
+      console.error("Failed to create game:", err);
+    });
+});
+
         const sounds = {
             evilEye: new Howl({
                 src: ['https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2F8e83c21b-7e79-4db8-8885-ff3e3fb49a75%2F14669546-e921-49cd-be52-928f871d97db.mp3?alt=media&token=477c62ac-d2ed-4782-8621-c2a0cbe4bb09'],
