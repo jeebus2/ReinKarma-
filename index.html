@@ -957,7 +957,7 @@ if (window.localPlayerId === gameData.hostId) {
 }
 const newPlayer = {
   id: window.localPlayerId,
-  name: "Player", // You can later make this user-defined
+  name: prompt("Enter your name:") || "Player",
   inventory: [],
   position: 0,
   credits: 0,
@@ -1044,6 +1044,7 @@ modal.innerHTML = `
 `;
 
 document.body.appendChild(modal);
+document.getElementById("lobby-screen").style.display = "block";
 
 // Copy to clipboard handler
 document.getElementById("copy-link-btn").onclick = () => {
