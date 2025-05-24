@@ -606,7 +606,9 @@
                 <button id="zoom-out">-</button>
             </div>
         </div>
-        
+      <div id="your-turn-indicator" style="display: none; color: yellow; font-size: 1.2rem; margin-bottom: 10px;">
+  🔁 Your Turn!
+</div>  
         <div id="controls">
             <button id="roll-button">Roll Dice</button>
             <div id="dice-container">
@@ -938,7 +940,7 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
-
+let isMultiplayer = false;
         // STEP 3.1 – Check if joining an existing game via URL
 const urlParams = new URLSearchParams(window.location.search);
 const joinGameId = urlParams.get("game");
@@ -993,8 +995,27 @@ document.getElementById("start-game-button").style.display = "none";
     document.getElementById("lobby-screen").style.display = "none";
     document.getElementById("start-screen").style.display = "none";
     document.getElementById("game-container").style.display = "block";
+// 🎯 Monitor whose turn it is
+db.ref(`/games/${joinGameId}/state/currentPlayerIndex`).on("value", snapshot => {
+  const index = snapshot.val();
+  if (index === null) return;
 
-    // (Optional: setup initial game state here)
+  db.ref(`/games/${joinGameId}/state/players`).once("value").then(playerSnap => {
+    const players = playerSnap.val() || {};
+    const playerArray = Object.values(players);
+    const currentPlayer = playerArray[index];
+
+    // Show game controls only to the active player
+    if (currentPlayer && currentPlayer.id === window.localPlayerId) {
+      document.getElementById("your-turn-indicator").style.display = "block";
+      // enable dice roll or action buttons here
+    } else {
+      document.getElementById("your-turn-indicator").style.display = "none";
+      // disable dice roll or buttons
+    }
+  });
+});
+
   }
 });
       
@@ -1009,61 +1030,14 @@ document.getElementById("start-game-button").style.display = "none";
   });
 }
 
-        document.getElementById("start-online-button").addEventListener("click", () => {
-  const gameId = generateGameId();
-  const hostId = generateClientId();
+let isMultiplayer = false;
 
-  // Store for later
-  window.currentGameId = gameId;
-  window.localPlayerId = hostId;
-
-  // Save basic game object
-  const gameData = {
-    hostId,
-    state: {
-      players: [],
-      currentPlayerIndex: 0,
-      board: [],
-      started: false
-    }
-  };
-
-  db.ref(`/games/${gameId}`).set(gameData)
-    .then(() => {
-const link = `${window.location.origin}?game=${gameId}`;
-const modal = document.createElement("div");
-modal.innerHTML = `
-  <div style="position: fixed; top: 20%; left: 50%; transform: translateX(-50%);
-              background: #222; color: white; padding: 20px; border: 2px solid #888; z-index: 1000;
-              font-family: sans-serif; text-align: center; width: 300px; border-radius: 10px;">
-    <p><strong>Game Created!</strong><br>Share this link:</p>
-    <input type="text" value="${link}" readonly style="width: 100%; padding: 5px; margin-bottom: 10px;" id="game-link-input">
-    <button id="copy-link-btn" style="padding: 5px 15px; margin-right: 10px;">Copy Link</button>
-    <button id="close-link-modal" style="padding: 5px 15px;">Close</button>
-  </div>
-`;
-
-document.body.appendChild(modal);
-document.getElementById("lobby-screen").style.display = "block";
-
-// Copy to clipboard handler
-document.getElementById("copy-link-btn").onclick = () => {
-  const input = document.getElementById("game-link-input");
-  input.select();
-  input.setSelectionRange(0, 99999); // Mobile support
-  navigator.clipboard.writeText(input.value);
-  alert("Link copied to clipboard!");
-};
-
-// Close modal handler
-document.getElementById("close-link-modal").onclick = () => {
-  modal.remove();
-};
-    })
-    .catch(err => {
-      console.error("Failed to create game:", err);
-    });
+document.getElementById("start-online-button").addEventListener("click", () => {
+  isMultiplayer = true;
+  document.getElementById("start-screen").style.display = "none";
+  document.getElementById("lobby-screen").style.display = "block";
 });
+
 // 🔘 Host clicks "Start Game"
 document.getElementById("start-game-button").addEventListener("click", () => {
   db.ref(`/games/${window.currentGameId}/state/started`).set(true)
