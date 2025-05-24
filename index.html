@@ -581,6 +581,14 @@
                 <br><br>
                 <button id="start-online-button">Start Online Game</button>
             </div>
+<div id="lobby-screen" style="display:none; margin-top: 20px;">
+  <h2>Lobby</h2>
+  <div id="player-list" style="font-size: 1.1rem; color: white;"></div>
+  <br>
+  <button id="start-game-button" style="display:none; padding: 12px 20px; font-size: 1.2rem;">
+    Start Game
+  </button>
+</div>
         </div>
     </div>
     
@@ -942,12 +950,14 @@ if (joinGameId) {
   db.ref(`/games/${joinGameId}`).once('value').then(snapshot => {
     if (snapshot.exists()) {
       const gameData = snapshot.val();
-      console.log("Joined game:", joinGameId, gameData);
-
-      alert(`Joined game: ${joinGameId}`);
+console.log("Joined game:", joinGameId, gameData);
+        // Show "Start Game" button only to the host
+if (window.localPlayerId === gameData.hostId) {
+  document.getElementById("start-game-button").style.display = "inline-block";
+}
 const newPlayer = {
   id: window.localPlayerId,
-  name: "Player", // You can later let them choose this
+  name: "Player", // You can later make this user-defined
   inventory: [],
   position: 0,
   credits: 0,
@@ -956,8 +966,38 @@ const newPlayer = {
 
 db.ref(`/games/${joinGameId}/state/players/${window.localPlayerId}`).set(newPlayer)
   .then(() => {
-    alert(`Joined game: ${joinGameId}`);
     console.log("Player added:", newPlayer);
+    alert(`Joined game: ${joinGameId}`);
+
+    // Show the lobby screen
+    document.getElementById("lobby-screen").style.display = "block";
+    const playerListDiv = document.getElementById("player-list");
+
+ // Listen for real-time updates to the player list
+db.ref(`/games/${joinGameId}/state/players`).on("value", snapshot => {
+  const players = snapshot.val() || {};
+  playerListDiv.innerHTML = ""; // Clear list
+
+  Object.values(players).forEach(player => {
+    const entry = document.createElement("div");
+    entry.textContent = `${player.name} (${player.id})`;
+    playerListDiv.appendChild(entry);
+  });
+});
+
+// 🔥 Listen for game start signal
+db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
+  if (snapshot.val() === true) {
+    console.log("Game started signal received!");
+document.getElementById("start-game-button").style.display = "none";
+    document.getElementById("lobby-screen").style.display = "none";
+    document.getElementById("start-screen").style.display = "none";
+    document.getElementById("game-container").style.display = "block";
+
+    // (Optional: setup initial game state here)
+  }
+});
+      
   })
   .catch(err => {
     console.error("Failed to add player:", err);
@@ -990,10 +1030,47 @@ db.ref(`/games/${joinGameId}/state/players/${window.localPlayerId}`).set(newPlay
 
   db.ref(`/games/${gameId}`).set(gameData)
     .then(() => {
-      alert(`Game created!\nShare this link:\n${window.location.origin}?game=${gameId}`);
+const link = `${window.location.origin}?game=${gameId}`;
+const modal = document.createElement("div");
+modal.innerHTML = `
+  <div style="position: fixed; top: 20%; left: 50%; transform: translateX(-50%);
+              background: #222; color: white; padding: 20px; border: 2px solid #888; z-index: 1000;
+              font-family: sans-serif; text-align: center; width: 300px; border-radius: 10px;">
+    <p><strong>Game Created!</strong><br>Share this link:</p>
+    <input type="text" value="${link}" readonly style="width: 100%; padding: 5px; margin-bottom: 10px;" id="game-link-input">
+    <button id="copy-link-btn" style="padding: 5px 15px; margin-right: 10px;">Copy Link</button>
+    <button id="close-link-modal" style="padding: 5px 15px;">Close</button>
+  </div>
+`;
+
+document.body.appendChild(modal);
+
+// Copy to clipboard handler
+document.getElementById("copy-link-btn").onclick = () => {
+  const input = document.getElementById("game-link-input");
+  input.select();
+  input.setSelectionRange(0, 99999); // Mobile support
+  navigator.clipboard.writeText(input.value);
+  alert("Link copied to clipboard!");
+};
+
+// Close modal handler
+document.getElementById("close-link-modal").onclick = () => {
+  modal.remove();
+};
     })
     .catch(err => {
       console.error("Failed to create game:", err);
+    });
+});
+// 🔘 Host clicks "Start Game"
+document.getElementById("start-game-button").addEventListener("click", () => {
+  db.ref(`/games/${window.currentGameId}/state/started`).set(true)
+    .then(() => {
+      console.log("Game started.");
+    })
+    .catch(err => {
+      console.error("Failed to start game:", err);
     });
 });
 
