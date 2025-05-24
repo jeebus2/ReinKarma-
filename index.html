@@ -931,6 +931,27 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+        // STEP 3.1 – Check if joining an existing game via URL
+const urlParams = new URLSearchParams(window.location.search);
+const joinGameId = urlParams.get("game");
+
+if (joinGameId) {
+  window.currentGameId = joinGameId;
+  window.localPlayerId = generateClientId();
+
+  db.ref(`/games/${joinGameId}`).once('value').then(snapshot => {
+    if (snapshot.exists()) {
+      const gameData = snapshot.val();
+      console.log("Joined game:", joinGameId, gameData);
+
+      alert(`Joined game: ${joinGameId}`);
+      // Step 3.2 will go here: Add player to game
+    } else {
+      alert("Game not found.");
+    }
+  });
+}
+
         document.getElementById("start-online-button").addEventListener("click", () => {
   const gameId = generateGameId();
   const hostId = generateClientId();
