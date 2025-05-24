@@ -722,6 +722,14 @@
         <img src="https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FAAA4EB8C-2489-41F3-BD7F-D600AC43C9D7.png?alt=media&token=cd0735b3-4f85-497a-b887-127193f302f4" alt="Robbery" style="width: 150px; height: auto; object-fit: contain;">
     </div>
     
+    <div id="select-inventory-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.9); color: white; padding: 20px; z-index: 160; max-width: 80%; border-style: solid; border-width: 30px; border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 40; border-image-repeat: stretch;">
+        <h3>View Inventory For:</h3>
+        <div id="select-inventory-player-buttons" style="margin-bottom: 15px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;">
+            <!-- Player buttons will be dynamically added here -->
+        </div>
+        <button id="close-select-inventory-modal-button" style="background-color: #f44336;">Cancel</button>
+    </div>
+
     <div id="inventory">
         <h3>Inventory</h3>
         <div id="inventory-items"></div>
@@ -734,7 +742,7 @@
         <h2>ReinKarma — Game Instructions</h2>
         
         <h3>OBJECTIVE</h3>
-        <p>Accumulate treasure and karma across multiple past lives. Reach Nirvana (square 160) and finish the game with the highest point total to win.</p>
+        <p>Accumulate treasure and karma across multiple past lives. Reach Nirvana (square 160) and finish the game with the highest credit total to win.</p>
         
         <h3>HOW TO WIN</h3>
         <ul>
@@ -742,7 +750,7 @@
             <li>Once Nirvana is reached, all players' final scores are tallied:</li>
             <li>Total value of treasure cards</li>
             <li>Remaining credits</li>
-            <li>Karmic Levels achieved (each one banks 3,000 points at the cost of 3,000 credits)</li>
+            <li>Karmic Levels achieved (each one banks 3,000 credits at the cost of 3,000 credits)</li>
         </ul>
         
         <h3>TURN SEQUENCE</h3>
@@ -760,7 +768,7 @@
             <li>If they say yes:</li>
             <li>3,000 worth of combined credits and treasures are deducted</li>
             <li>One level is locked in</li>
-            <li>The player banks 3,000 points that cannot be lost</li>
+            <li>The player banks 3,000 credits that cannot be lost</li>
             <li>There is no bonus for karmic levels — only the locked-in value.</li>
         </ul>
         
@@ -856,7 +864,7 @@
             <li>Gamble</li>
             <li>Advance karmic levels</li>
             <li>Treasures are secret until revealed.</li>
-            <li>Treasures are worth 0 to 500 points.</li>
+            <li>Treasures are worth 0 to 500 credits.</li>
             <li>Major Treasures are the most valuable and free.</li>
         </ul>
         
@@ -1251,7 +1259,7 @@ const darkAgesSquareImageUrls = [
 
             document.getElementById('past-life-player-name').textContent = `${playerStats.name}'s Past Life`;
             document.getElementById('past-life-karmic-level').textContent = `Karmic Level: ${karmicLevelDisplayName}`;
-            document.getElementById('past-life-score-info').textContent = `Final Score: ${totalFinalScore} (Life Score: ${scoreRelevantToCurrentLevel})`;
+            document.getElementById('past-life-score-info').textContent = `Final Credits: ${totalFinalScore} (Life Credits: ${scoreRelevantToCurrentLevel})`;
 
             if (pastLifeEntry) {
                 document.getElementById('past-life-title').textContent = pastLifeEntry.title;
@@ -1678,7 +1686,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                     eraContent[mappedEra].treasures.push({
                         title: title,
                         value: value,
-                        description: `${title}. Worth ${value} points.`
+                        description: `${title}. Worth ${value} credits.`
                     });
                 } else {
                     console.warn("Unknown era or uninitialized eraContent for treasure card: ", rawEra);
@@ -1759,6 +1767,8 @@ Industrial Age\tFuture steam punk gear\t500`;
         const eventTitle = document.getElementById('event-title');
         const eventDescription = document.getElementById('event-description');
         const eventButton = document.getElementById('event-button');
+        const selectInventoryModal = document.getElementById('select-inventory-modal');
+        const closeSelectInventoryModalButton = document.getElementById('close-select-inventory-modal-button');
         const toastElement = document.getElementById('toast');
         const rulesButton = document.getElementById('rules-button');
         const rulesModal = document.getElementById('rules-modal');
@@ -1832,9 +1842,8 @@ Industrial Age\tFuture steam punk gear\t500`;
         let lastPanY = 0;
         let autoFollowEnabled = true; // Auto-follow is always enabled by default
         let followPlayer = true; // Only follow the active player
-        let maxPanLimit = 500; // Increased pan limit to ensure we can reach all edges of the board even at high zoom
+        let maxPanLimit = 300; // Increased pan limit to ensure we can reach all edges of the board
         let cameraUpdateInterval; // For continuous camera updates to keep player centered
-        let maxZoomLevel = 4.5; // Increased maximum zoom level for closer view
         
         function initZoomControls() {
             const boardContainer = document.getElementById('board-container');
@@ -1845,7 +1854,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             
             // Zoom in button
             zoomInBtn.addEventListener('click', () => {
-                zoomLevel = Math.min(zoomLevel + 0.25, maxZoomLevel);
+                zoomLevel = Math.min(zoomLevel + 0.25, 3);
                 updateBoardTransform();
                 // Always center on current player when zooming in
                 centerOnPlayer(gameState.currentPlayerIndex);
@@ -1865,7 +1874,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             
             // Reset zoom button
             zoomResetBtn.addEventListener('click', () => {
-                zoomLevel = 3.5; // Reset to a more zoomed-in state
+                zoomLevel = 3; // Reset to the initial fully zoomed-in state
                 resetPan();
                 updateBoardTransform();
                 // Center on current player after reset, instantly
@@ -1877,7 +1886,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                 e.preventDefault();
                 const delta = e.deltaY > 0 ? -0.1 : 0.1;
                 const oldZoom = zoomLevel;
-                zoomLevel = Math.max(1, Math.min(maxZoomLevel, zoomLevel + delta));
+                zoomLevel = Math.max(1, Math.min(3, zoomLevel + delta));
                 updateBoardTransform();
                 
                 if (zoomLevel === 1) {
@@ -1957,22 +1966,8 @@ Industrial Age\tFuture steam punk gear\t500`;
                 if (autoFollowEnabled && followPlayer && gameState.gameStarted && !isDragging) {
                     // Only apply gentle centering (not instant) to avoid jarring camera movements
                     centerOnPlayer(gameState.currentPlayerIndex, false);
-                    
-                    // Check if any modals are open - if so, ensure player remains centered
-                    const modalsOpen = [
-                        document.getElementById('event-display').style.display === 'block',
-                        document.getElementById('cell-modal').style.display === 'block',
-                        document.getElementById('item-modal').style.display === 'block',
-                        document.getElementById('inventory').style.display === 'block',
-                        document.getElementById('turn-transition-modal').style.display === 'block'
-                    ].some(isOpen => isOpen);
-                    
-                    if (modalsOpen) {
-                        // When modals are open, ensure player stays centered with a stronger centering effect
-                        centerOnPlayer(gameState.currentPlayerIndex, false, true);
-                    }
                 }
-            }, 250); // Check more frequently for smoother following
+            }, 500); // Check every 500ms - frequent enough for smooth following but not too CPU intensive
         }
         
         function startDrag(e) {
@@ -2054,7 +2049,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             });
         }
         
-        function centerOnPlayer(playerIndex, instant = false, modalOpen = false) {
+        function centerOnPlayer(playerIndex, instant = false) {
             // Always center on player regardless of zoom level
             const player = gameState.players[playerIndex];
             const position = boardPath[player.position];
@@ -2098,9 +2093,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                     // Otherwise, move a percentage of the way there for smoother motion
                     // The interpolation factor controls how quickly the camera catches up
                     // Using a higher factor for current player to ensure they stay centered
-                    // When a modal is open, use an even higher factor to ensure player stays centered
-                    const baseInterpolationFactor = playerIndex === gameState.currentPlayerIndex ? 0.92 : 0.85;
-                    const interpolationFactor = modalOpen ? 0.98 : baseInterpolationFactor;
+                    const interpolationFactor = playerIndex === gameState.currentPlayerIndex ? 0.92 : 0.85;
                     panX += distX * interpolationFactor;
                     panY += distY * interpolationFactor;
                 }
@@ -2506,24 +2499,78 @@ Industrial Age\tFuture steam punk gear\t500`;
             // Add new listeners
             rollButton.addEventListener('click', rollDice);
             inventoryButton.addEventListener('click', toggleInventory);
-            closeInventoryButton.addEventListener('click', toggleInventory);
-            eventButton.addEventListener('click', hideEvent);
+            closeInventoryButton.addEventListener('click', toggleInventory); // This button is inside the main inventory panel
+            // eventButton's listener is often set dynamically, but a generic hide can be a fallback.
+            // It's better to ensure event-specific handlers are attached when an event modal is shown.
+            // For the new select-inventory-modal:
+            if (closeSelectInventoryModalButton) {
+                 closeSelectInventoryModalButton.addEventListener('click', () => {
+                    if(selectInventoryModal) selectInventoryModal.style.display = 'none';
+                });
+            }
         }
         
-        // Toggle inventory panel
+        // Toggle inventory panel logic
         function toggleInventory() {
-            const inventory = document.getElementById('inventory');
-            if (inventory.style.display === 'block') {
-                inventory.style.display = 'none';
-            } else {
-                inventory.style.display = 'block';
-                updateInventoryDisplay();
-                
-                // Ensure player stays centered when inventory opens
-                if (gameState.gameStarted) {
-                    centerOnPlayer(gameState.currentPlayerIndex, false, true);
-                }
+            const mainInventoryPanel = document.getElementById('inventory');
+            const selectInventoryModalElement = document.getElementById('select-inventory-modal');
+
+            if (mainInventoryPanel.style.display === 'block') {
+                mainInventoryPanel.style.display = 'none';
+                return;
             }
+            if (selectInventoryModalElement.style.display === 'block') {
+                selectInventoryModalElement.style.display = 'none';
+                return;
+            }
+
+            if (!gameState.players || gameState.players.length === 0) {
+                toast("Game not started or no players available.");
+                return;
+            }
+
+            const humanPlayers = gameState.players.map((p, index) => ({ ...p, originalIndex: index })).filter(p => !p.isAI);
+
+            if (humanPlayers.length === 0) {
+                toast("No human players to show inventory for.");
+                return;
+            }
+
+            const playerWhoseInventory = gameState.players[playerIndexToShow];
+            if (!playerWhoseInventory) {
+                console.error("Player not found for inventory display, index:", playerIndexToShow);
+                inventoryItems.innerHTML = '<p>Error: Player data not found.</p>';
+                return;
+            }
+            inventoryItems.innerHTML = '';
+
+            // If current player is human, show their inventory directly.
+            // Or if only one human player exists in the game.
+            if ((!currentPlayer.isAI && gameState.gameStarted) || humanPlayers.length === 1) {
+                const playerIndexToShow = !currentPlayer.isAI ? gameState.currentPlayerIndex : humanPlayers[0].originalIndex;
+                showPlayerSpecificInventory(playerIndexToShow);
+            } else {
+                // Multiple human players, and it's AI's turn, or game not focused on a single human player's turn context for inventory
+                const playerButtonsContainer = document.getElementById('select-inventory-player-buttons');
+                playerButtonsContainer.innerHTML = ''; // Clear previous buttons
+
+                humanPlayers.forEach(player => {
+                    const btn = document.createElement('button');
+                    btn.textContent = player.name;
+                    btn.style.margin = '5px'; // Ensure buttons have some spacing
+                    btn.onclick = () => {
+                        showPlayerSpecificInventory(player.originalIndex);
+                        selectInventoryModalElement.style.display = 'none';
+                    };
+                    playerButtonsContainer.appendChild(btn);
+                });
+                selectInventoryModalElement.style.display = 'block';
+            }
+        }
+
+        function showPlayerSpecificInventory(playerIndex) {
+            updateInventoryDisplay(playerIndex); // Pass the target player index
+            document.getElementById('inventory').style.display = 'block';
         }
         
         // Hide event display
@@ -2537,11 +2584,6 @@ Industrial Age\tFuture steam punk gear\t500`;
             eventDescription.innerHTML = description;
             eventDisplay.style.display = 'block';
             
-            // Ensure player stays centered when modal opens
-            if (gameState.gameStarted) {
-                centerOnPlayer(gameState.currentPlayerIndex, false, true);
-            }
-            
             // Reset event button
             const eventButtons = document.getElementById('event-buttons');
             eventButtons.innerHTML = '';
@@ -2553,7 +2595,7 @@ Industrial Age\tFuture steam punk gear\t500`;
         }
         
         // Update inventory display
-        function updateInventoryDisplay() {
+        function updateInventoryDisplay(playerIndexToShow = gameState.currentPlayerIndex) {
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
             inventoryItems.innerHTML = '';
             
@@ -2561,23 +2603,29 @@ Industrial Age\tFuture steam punk gear\t500`;
             const playerInfoElement = document.createElement('div');
             playerInfoElement.style.marginBottom = '15px';
             playerInfoElement.style.padding = '10px';
-            playerInfoElement.style.backgroundColor = currentPlayer.color;
+            playerInfoElement.style.backgroundColor = playerWhoseInventory.color;
             playerInfoElement.style.borderRadius = '5px';
-            playerInfoElement.innerHTML = `<strong>${currentPlayer.name}'s Inventory</strong><br>Credits: ${currentPlayer.credits}`;
+            playerInfoElement.innerHTML = `<strong>${playerWhoseInventory.name}'s Inventory</strong><br>Credits: ${playerWhoseInventory.credits}`;
             inventoryItems.appendChild(playerInfoElement);
             
             // Display items section if any
-            if (currentPlayer.inventory.length > 0) {
+            if (playerWhoseInventory.inventory.length > 0) {
                 const itemsHeader = document.createElement('h4');
                 itemsHeader.textContent = 'Items:';
                 itemsHeader.style.marginBottom = '10px';
                 inventoryItems.appendChild(itemsHeader);
                 
-                currentPlayer.inventory.forEach((item, index) => {
+                playerWhoseInventory.inventory.forEach((item, index) => {
                     const itemElement = document.createElement('div');
                     itemElement.className = 'inventory-item';
                     itemElement.innerHTML = `<strong>${item.name}</strong><br>${item.effect}`;
-                    itemElement.onclick = () => useItem(index);
+                    // Only allow using items if it's this player's actual turn
+                    if (playerIndexToShow === gameState.currentPlayerIndex && !gameState.players[gameState.currentPlayerIndex].isAI) {
+                       itemElement.onclick = () => useItem(index, playerIndexToShow); // Pass playerIndexToShow
+                       itemElement.style.cursor = 'pointer';
+                    } else {
+                        itemElement.style.cursor = 'default'; // Not clickable if not their turn
+                    }
                     inventoryItems.appendChild(itemElement);
                 });
             } else {
@@ -2595,9 +2643,9 @@ Industrial Age\tFuture steam punk gear\t500`;
             treasuresHeader.style.marginBottom = '10px';
             inventoryItems.appendChild(treasuresHeader);
             
-            if (currentPlayer.treasures.length > 0) {
+            if (playerWhoseInventory.treasures.length > 0) {
                 // Sort treasures by value (highest first) for better display
-                const sortedTreasures = [...currentPlayer.treasures].sort((a, b) => {
+                const sortedTreasures = [...playerWhoseInventory.treasures].sort((a, b) => {
                     const valueA = a.value || 0;
                     const valueB = b.value || 0;
                     return valueB - valueA;
@@ -2607,30 +2655,30 @@ Industrial Age\tFuture steam punk gear\t500`;
                     const treasureElement = document.createElement('div');
                     treasureElement.className = 'inventory-item';
                     treasureElement.style.backgroundColor = 'rgba(255, 215, 0, 0.2)';
-                    treasureElement.innerHTML = `<strong>${treasure.title}</strong><br>Value: ${treasure.value || 0} points`;
+                    treasureElement.innerHTML = `<strong>${treasure.title}</strong><br>Value: ${treasure.value || 0} credits`;
                     treasureElement.onclick = () => showItemModal(treasure);
                     inventoryItems.appendChild(treasureElement);
                 });
                 
                 // Calculate total treasure value
-                const totalTreasureValue = currentPlayer.treasures.reduce((sum, treasure) => sum + (treasure.value || 0), 0);
+                const totalTreasureValue = playerWhoseInventory.treasures.reduce((sum, treasure) => sum + (treasure.value || 0), 0);
                 
                 // Add total treasure value
                 const totalElement = document.createElement('div');
                 totalElement.style.marginTop = '10px';
                 totalElement.style.fontWeight = 'bold';
                 totalElement.style.textAlign = 'right';
-                totalElement.textContent = `Total Treasure Value: ${totalTreasureValue} points`;
+                totalElement.textContent = `Total Treasure Value: ${totalTreasureValue} credits`;
                 inventoryItems.appendChild(totalElement);
                 
                 // Add combined value (credits + treasures)
-                const combinedValue = currentPlayer.credits + totalTreasureValue;
+                const combinedValue = playerWhoseInventory.credits + totalTreasureValue;
                 const combinedElement = document.createElement('div');
                 combinedElement.style.marginTop = '5px';
                 combinedElement.style.fontWeight = 'bold';
                 combinedElement.style.textAlign = 'right';
                 combinedElement.style.color = '#4CAF50';
-                combinedElement.textContent = `Combined Value: ${combinedValue} points`;
+                combinedElement.textContent = `Combined Value: ${combinedValue} credits`;
                 inventoryItems.appendChild(combinedElement);
             } else {
                 const noTreasuresElement = document.createElement('p');
@@ -2661,18 +2709,11 @@ Industrial Age\tFuture steam punk gear\t500`;
             cellEra.textContent = eraName;
             
             cellModal.style.display = 'block';
-            
-            // Ensure player stays centered when modal opens
-            if (gameState.gameStarted) {
-                centerOnPlayer(gameState.currentPlayerIndex, false, true);
-            }
 
             // Default close button action is just to hide THIS modal.
             // The actual game logic for the cell's effect is triggered elsewhere (in processCellEffect).
             document.getElementById('cell-close-button').onclick = () => {
                  cellModal.style.display = 'none';
-                 // Re-center on player after modal closes
-                 centerOnPlayer(gameState.currentPlayerIndex, false, false);
             };
         }
         
@@ -2721,15 +2762,8 @@ Industrial Age\tFuture steam punk gear\t500`;
             
             itemModal.style.display = 'block';
             
-            // Ensure player stays centered when modal opens
-            if (gameState.gameStarted) {
-                centerOnPlayer(gameState.currentPlayerIndex, false, true);
-            }
-            
             document.getElementById('item-close-button').onclick = () => {
                 itemModal.style.display = 'none';
-                // Re-center on player after modal closes
-                centerOnPlayer(gameState.currentPlayerIndex, false, false);
                 // If this is a treasure reveal after landing on a square, move to next player
                 if (gameState.processingMove) {
                     setTimeout(nextPlayer, 500);
@@ -2749,8 +2783,8 @@ Industrial Age\tFuture steam punk gear\t500`;
         }
         
         // Use item from inventory
-        function useItem(itemIndex) {
-            const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        function useItem(itemIndex, actingPlayerIndex = gameState.currentPlayerIndex) { // Added actingPlayerIndex
+            const currentPlayer = gameState.players[actingPlayerIndex]; // Use actingPlayerIndex
             const item = currentPlayer.inventory[itemIndex];
             
             if (!item) return;
@@ -2823,7 +2857,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             
             // Remove item from inventory
             currentPlayer.inventory.splice(itemIndex, 1);
-            updateInventoryDisplay();
+            updateInventoryDisplay(actingPlayerIndex); // Update for the correct player
         }
         
         // Calculate total value of player's treasures
@@ -2860,7 +2894,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                     `Cost: 3,000 from your combined total\n` +
                     `Current credits: ${player.credits}\n` +
                     `Current treasure value: ${treasureValue}\n` +
-                    `Reward: 3,000 points banked that cannot be lost`);
+                    `Reward: 3,000 credits banked that cannot be lost`);
                 
                 // Clear previous buttons
                 const eventButtons = document.getElementById('event-buttons');
@@ -2945,21 +2979,10 @@ Industrial Age\tFuture steam punk gear\t500`;
             gameState.lifetimeCredits = [];
             
             for (let i = 0; i < numPlayers; i++) {
-                let playerName;
-                let isAI = false;
+                let playerName = prompt(`Enter name for Player ${i+1}:`, `Player ${i+1}`);
+                if (!playerName) playerName = `Player ${i+1}`; // Default name if prompt is cancelled
+                const isAI = false; // All players are human by default now
                 
-                if (i === 0) {
-                    playerName = prompt(`Enter name for Player ${i+1}:`, `Player ${i+1}`);
-                } else {
-                    isAI = confirm(`Make Player ${i+1} an AI player?`);
-                    if (isAI) {
-                        playerName = `AI ${i}`;
-                    } else {
-                        playerName = prompt(`Enter name for Player ${i+1}:`, `Player ${i+1}`);
-                    }
-                }
-                
-                if (!playerName) playerName = `Player ${i+1}`;
                 
                 const playerColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6'];
                 const playerTokenImages = [
@@ -3005,104 +3028,13 @@ Industrial Age\tFuture steam punk gear\t500`;
             // Set up event listeners for game controls
             setupEventListeners();
             
-            // Offer initial insurance to all players
-            setTimeout(() => {
-                offerInitialInsurance();
-            }, 500);
+            // Start game with the first player's turn sequence after setup.
+            // The showTurnTransitionModal will lead to proceedWithTurn,
+            // where the initial insurance offer will happen for the first player.
+            showTurnTransitionModal(gameState.players[gameState.currentPlayerIndex]); // currentPlayerIndex is 0
         }
         
-        // Offer initial insurance to all players
-        function offerInitialInsurance() {
-            // Start with the first player
-            offerInsuranceToPlayer(0);
-        }
-        
-        // Offer insurance to a specific player
-        function offerInsuranceToPlayer(playerIndex) {
-            if (playerIndex >= gameState.players.length) {
-                // All players have been offered insurance, start the game
-                showEvent('Game Started', 'Welcome to ReinKarma! Roll the dice to begin your journey through time.');
-                
-                // Customize the OK button for the 'Game Started' modal to stop music
-                const eventButtonsContainer = document.getElementById('event-buttons');
-                const gameStartedOkButton = eventButtonsContainer.querySelector('#event-button'); 
-                if (gameStartedOkButton && document.getElementById('event-title').textContent === 'Game Started') {
-                    gameStartedOkButton.onclick = () => {
-                        if (sounds.startScreen && sounds.startScreen.playing()) {
-                            sounds.startScreen.stop();
-                        }
-                        hideEvent(); // Original action: hide the modal
-                    };
-                }
-                return;
-            }
-            
-            const player = gameState.players[playerIndex];
-            const insuranceCost = 500;
-            
-            if (player.isAI) {
-                // AI has a 70% chance to buy insurance if it can afford it
-                if (player.credits >= insuranceCost && Math.random() < 0.7) {
-                    player.credits -= insuranceCost;
-                    player.hasInsurance = true;
-                    toast(`${player.name} bought insurance for ${insuranceCost} credits.`);
-                } else {
-                    toast(`${player.name} declined insurance.`);
-                }
-                // Move to next player
-                setTimeout(() => offerInsuranceToPlayer(playerIndex + 1), 500);
-                return;
-            }
-            
-            // For human players, show a modal dialog
-            showEvent('Insurance Offer', 
-                `${player.name}: Would you like to buy insurance for ${insuranceCost} credits?\n\n` +
-                `Insurance protects against Sudden Death.\n\n` +
-                `Your current credits: ${player.credits}`);
-            
-            // Clear previous buttons
-            const eventButtons = document.getElementById('event-buttons');
-            eventButtons.innerHTML = '';
-            
-            // Add Yes button
-            const yesButton = document.createElement('button');
-            yesButton.textContent = 'Yes';
-            yesButton.style.marginRight = '10px';
-            yesButton.style.backgroundColor = '#4CAF50';
-            yesButton.onclick = () => {
-                player.credits -= insuranceCost;
-                player.hasInsurance = true;
-                toast(`${player.name} bought insurance!`);
-                hideEvent();
-                
-                // Update display
-                gameState.currentPlayerIndex = playerIndex;
-                updateInventoryDisplay();
-                updatePlayerInfo();
-                
-                // Move to next player
-                setTimeout(() => offerInsuranceToPlayer(playerIndex + 1), 500);
-            };
-            eventButtons.appendChild(yesButton);
-            
-            // Add No button
-            const noButton = document.createElement('button');
-            noButton.textContent = 'No';
-            noButton.style.backgroundColor = '#F44336';
-            noButton.onclick = () => {
-                toast(`${player.name} declined insurance.`);
-                hideEvent();
-                
-                // Update display
-                gameState.currentPlayerIndex = playerIndex;
-                updateInventoryDisplay();
-                updatePlayerInfo();
-                
-                // Move to next player
-                setTimeout(() => offerInsuranceToPlayer(playerIndex + 1), 500);
-            };
-            eventButtons.appendChild(noButton);
-        }
+
         
         // Update player information display
         function updatePlayerInfo() {
@@ -3128,11 +3060,11 @@ Industrial Age\tFuture steam punk gear\t500`;
                 const karmicLevelDisplay = `<span class="karmic-level">${gameState.karmicLevels[player.karmicLevel]}</span>`;
                 
                 playerDiv.innerHTML = `
-                    <strong>${player.name}</strong> ${player.isAI ? '(AI)' : ''} ${karmicLevelDisplay}<br>
+                    <strong>${player.name}</strong> ${karmicLevelDisplay}<br>
                     Credits: ${player.credits}<br>
                     Treasures: ${player.treasures.length}<br>
                     ${player.hasInsurance ? '🛡️ Insured' : ''}
-                    ${player.bankedPoints > 0 ? `<br>Banked: ${player.bankedPoints} points` : ''}
+                    ${player.bankedPoints > 0 ? `<br>Banked: ${player.bankedPoints} credits` : ''}
                 `;
                 
                 // Add a small treasures list if player has any and it's their turn
@@ -3425,6 +3357,7 @@ Industrial Age\tFuture steam punk gear\t500`;
         // Roll the dice
         // This function will contain the core dice rolling and movement logic for human players
         function proceedWithHumanRoll() {
+            rollButton.disabled = true; // Ensure it's disabled at the start of processing the roll
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
             
             // Disable roll button during turn
@@ -3514,7 +3447,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                 return;
             }
             
-            // For AI or non-doubles, proceed with normal movement
+            // Proceed with normal movement
             const oldPosForMove = currentPlayer.position; // Capture position before animation starts
             const targetPosForMove = Math.min(oldPosForMove + diceResult.total, 169);
 
@@ -3549,12 +3482,11 @@ Industrial Age\tFuture steam punk gear\t500`;
             
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
             
+            // Disable roll button by default, enable for human player later if it's their turn
+            rollButton.disabled = true;
+
             // Check if it's an AI player's turn
-            if (currentPlayer.isAI) {
-                // AI logic for using items before rolling
-                handleAITurn();
-                return;
-            }
+
             
             // Check if player can ascend to next karmic level
             if (checkKarmicLevel(gameState.currentPlayerIndex)) {
@@ -3563,6 +3495,8 @@ Industrial Age\tFuture steam punk gear\t500`;
             }
 
             // If no ascension pathway taken by checkKarmicLevel, proceed directly.
+            // Ensure roll button is disabled while human player makes ascension choice
+            rollButton.disabled = true;
             proceedWithHumanRoll();
         }
         
@@ -3723,6 +3657,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             // This ensures the active player remains visible throughout their entire turn
             // Force an immediate centering with true parameter to ensure perfect centering
             centerOnPlayer(gameState.currentPlayerIndex, true);
+            updatePlayerInfo(); // Update info to reflect the end of the current player's turn visuals before modal
             
             // Move to next player index
             gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
@@ -3731,16 +3666,13 @@ Industrial Age\tFuture steam punk gear\t500`;
             // Update player info display early so the highlight moves immediately
             updatePlayerInfo(); 
             
-            // Camera centering for the new player is handled in showTurnTransitionModal
-            // This ensures we keep the previous player centered until the modal appears
-
-            // Show the transition modal
+            // Show the transition modal. Camera centering for the new player happens inside showTurnTransitionModal.
             showTurnTransitionModal(playerForThisTurn);
         }
 
         function showTurnTransitionModal(player) {
             turnTransitionPlayerName.textContent = `${player.name}'s Turn`;
-            turnTransitionMessage.textContent = player.isAI ? `${player.name} (AI) is preparing their move...` : "It's your turn!";
+            turnTransitionMessage.textContent = "It's your turn!";
             
             // CRITICAL: Only NOW center camera on the new active player when the modal is shown
             // This ensures the previous player remains perfectly centered until this modal appears
@@ -3749,29 +3681,74 @@ Industrial Age\tFuture steam punk gear\t500`;
             
             turnTransitionOkButton.onclick = () => {
                 turnTransitionModal.style.display = 'none';
-                // Apply a higher zoom level at the start of each player's turn
-                // This ensures they get a closer view of their token
-                zoomLevel = Math.min(zoomLevel, 3.5); // Set a good default zoom level for new turns
-                updateBoardTransform();
-                centerOnPlayer(gameState.currentPlayerIndex, true); // Re-center with new zoom
                 proceedWithTurn(player); 
             };
 
             turnTransitionModal.style.display = 'block';
 
-            if (player.isAI) {
-                turnTransitionOkButton.disabled = true; // Disable button for AI, it will auto-proceed
-                setTimeout(() => {
-                    if (turnTransitionModal.style.display === 'block') { // Check if still visible
-                         turnTransitionOkButton.click();
-                    }
-                }, 2000); // AI "reads" the modal for 2s
-            } else {
-                turnTransitionOkButton.disabled = false; // Ensure button is enabled for human player
-            }
+            turnTransitionOkButton.disabled = false; // Ensure button is enabled for human player
         }
 
         function proceedWithTurn(playerForThisTurn) {
+            // Offer initial insurance if it's their first turn and not yet offered
+            if (!playerForThisTurn.initialInsuranceOffered) {
+                playerForThisTurn.initialInsuranceOffered = true;
+                const insuranceCost = 500;
+
+                const startPlayerTurnLogic = () => {
+                    if (playerForThisTurn.skipNextTurn) {
+                        toast(`${playerForThisTurn.name} misses their turn!`);
+                        playerForThisTurn.skipNextTurn = false; // Consume the skip
+                        setTimeout(() => { nextPlayer(); }, 1500);
+                        return;
+                    }
+                    rollButton.disabled = false;
+                    toast(`It's ${playerForThisTurn.name}'s turn. Roll the dice!`);
+                };
+
+
+
+                // Human Player Logic for initial insurance
+                showEvent('Initial Insurance Offer',
+                    `Welcome to your first turn, ${playerForThisTurn.name}! Would you like to buy insurance?\n\nIt costs ${insuranceCost} credits and protects against Sudden Death.\n\nYour current credits: ${playerForThisTurn.credits}`);
+
+                const eventButtons = document.getElementById('event-buttons');
+                eventButtons.innerHTML = '';
+
+                const yesButton = document.createElement('button');
+                yesButton.textContent = 'Yes, Buy Insurance';
+                yesButton.style.marginRight = '10px';
+                yesButton.style.backgroundColor = '#4CAF50';
+                yesButton.disabled = playerForThisTurn.credits < insuranceCost;
+
+                yesButton.onclick = () => {
+                    if (playerForThisTurn.credits >= insuranceCost) {
+                        playerForThisTurn.credits -= insuranceCost;
+                        playerForThisTurn.hasInsurance = true;
+                        toast(`${playerForThisTurn.name} bought initial insurance!`);
+                    } else {
+                        toast(`${playerForThisTurn.name} cannot afford initial insurance.`);
+                    }
+                    hideEvent();
+                    updatePlayerInfo();
+                    startPlayerTurnLogic(); // Proceed with turn logic
+                };
+                eventButtons.appendChild(yesButton);
+
+                const noButton = document.createElement('button');
+                noButton.textContent = 'No, Decline';
+                noButton.style.backgroundColor = '#F44336';
+                noButton.onclick = () => {
+                    toast(`${playerForThisTurn.name} declined initial insurance.`);
+                    hideEvent();
+                    updatePlayerInfo();
+                    startPlayerTurnLogic(); // Proceed with turn logic
+                };
+                eventButtons.appendChild(noButton);
+                return; // Human needs to click, then turn proceeds via startPlayerTurnLogic
+            }
+
+            // Original proceedWithTurn logic (if not first turn or initial insurance already handled)
             if (playerForThisTurn.skipNextTurn) {
                 toast(`${playerForThisTurn.name} misses their turn!`);
                 playerForThisTurn.skipNextTurn = false; // Consume the skip
@@ -3783,14 +3760,9 @@ Industrial Age\tFuture steam punk gear\t500`;
                 return; // Stop further processing for the skipped player's turn
             }
             
-            // If next player is AI, trigger their turn
-            if (playerForThisTurn.isAI) {
-                rollButton.disabled = true; // Keep roll button disabled for AI
-                setTimeout(handleAITurn, 500); // Short delay, then AI turn starts
-            } else {
-                rollButton.disabled = false; // Enable roll button for human player
-                toast(`It's ${playerForThisTurn.name}'s turn. Roll the dice!`);
-            }
+            // Human player's turn
+            rollButton.disabled = false; // Enable roll button ONLY for the human player whose turn it is.
+            toast(`It's ${playerForThisTurn.name}'s turn. Roll the dice!`);
         }
         
         // End the game and show final scores
@@ -3824,8 +3796,8 @@ Industrial Age\tFuture steam punk gear\t500`;
             let resultsMessage = "Game Over! Final Scores:\n\n";
             
             scores.forEach((playerScore, index) => {
-                resultsMessage += `${index + 1}. ${playerScore.name}: ${playerScore.score} points\n`;
-                resultsMessage += `   • Karmic Level: ${gameState.karmicLevels[playerScore.karmicLevel]} (${playerScore.bankedPoints} points)\n`;
+                resultsMessage += `${index + 1}. ${playerScore.name}: ${playerScore.score} credits\n`;
+                resultsMessage += `   • Karmic Level: ${gameState.karmicLevels[playerScore.karmicLevel]} (${playerScore.bankedPoints} credits)\n`;
                 resultsMessage += `   • Treasures: ${playerScore.treasures}\n`;
             });
             
@@ -3851,8 +3823,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             }
         }
         
-        // Offer insurance when landing on a Title square (OLD - Replaced by offerInsuranceConditional)
-        /* function offerInsurance() { ... } */
+
 
         // Offer insurance conditionally (e.g., on era change or Title square)
         function offerInsuranceConditional(isEraChangeOffer, nextActionCallback) {
@@ -3864,21 +3835,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                 offerReasonMessage = `Welcome to the ${gameState.currentEra.charAt(0).toUpperCase() + gameState.currentEra.slice(1)} Era, ${currentPlayer.name}! `;
             }
 
-            // AI Logic
-            if (currentPlayer.isAI) {
-                if (!currentPlayer.hasInsurance && currentPlayer.credits >= insuranceCost && Math.random() < 0.7) {
-                    currentPlayer.credits -= insuranceCost;
-                    currentPlayer.hasInsurance = true;
-                    toast(`${currentPlayer.name} (AI) bought insurance for ${insuranceCost} credits.`);
-                } else if (currentPlayer.hasInsurance) {
-                    toast(`${currentPlayer.name} (AI) is already insured.`);
-                } else {
-                    toast(`${currentPlayer.name} (AI) declined insurance.`);
-                }
-                updatePlayerInfo();
-                if (nextActionCallback) setTimeout(nextActionCallback, 1000); // AI proceeds after a short delay
-                return;
-            }
+
 
             // Human Player Logic
             showEvent('Insurance Offer',
@@ -3925,50 +3882,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             eventButtons.appendChild(noButton);
         }
 
-        // Offer insurance when landing on a Title square
-        function offerInsurance_OLD_FUNCTION_AVOID_USAGE() {
-            const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-            const insuranceCost = 500;
-            
-            // Show a modal dialog
-            showEvent('Insurance Offer', 
-                `${currentPlayer.name}: Would you like to buy insurance for ${insuranceCost} credits?\n\n` +
-                `Insurance protects against Sudden Death.\n\n` +
-                `Your current credits: ${currentPlayer.credits}`);
-            
-            // Clear previous buttons
-            const eventButtons = document.getElementById('event-buttons');
-            eventButtons.innerHTML = '';
-            
-            // Add Yes button
-            const yesButton = document.createElement('button');
-            yesButton.textContent = 'Yes';
-            yesButton.style.marginRight = '10px';
-            yesButton.style.backgroundColor = '#4CAF50';
-            yesButton.onclick = () => {
-                currentPlayer.credits -= insuranceCost;
-                currentPlayer.hasInsurance = true;
-                toast(`${currentPlayer.name} bought insurance!`);
-                hideEvent();
-                updateInventoryDisplay();
-                updatePlayerInfo();
-                setTimeout(nextPlayer, 1000); // Continue to next player after insurance decision
-            };
-            eventButtons.appendChild(yesButton);
-            
-            // Add No button
-            const noButton = document.createElement('button');
-            noButton.textContent = 'No';
-            noButton.style.backgroundColor = '#F44336';
-            noButton.onclick = () => {
-                toast(`${currentPlayer.name} declined insurance.`);
-                hideEvent();
-                updateInventoryDisplay();
-                updatePlayerInfo();
-                setTimeout(nextPlayer, 1000); // Continue to next player after insurance decision
-            };
-            eventButtons.appendChild(noButton);
-        }
+
         
         // Process the effect of the cell the player landed on
         function processCellEffect() {
@@ -4057,7 +3971,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                                     
                                     // Show the treasure
                                     hideEvent();
-                                    toast(`${currentPlayer.name} acquired: ${treasure.title} (Worth ${treasure.value} points)!`);
+                                    toast(`${currentPlayer.name} acquired: ${treasure.title} (Worth ${treasure.value} credits)!`);
                                     setTimeout(() => {
                                         showItemModal(treasure); // showItemModal will handle moving to next player after close
                                     }, 1000);
@@ -4423,22 +4337,17 @@ Industrial Age\tFuture steam punk gear\t500`;
 
                             const eventMessageBase = `${currentPlayer.name} landed on Sudden Death! Lost ${creditsLost} credits and ${treasuresLostArray.length} treasure(s) (total value ${valueOfTreasuresLost}) to the Charity Pool.`;
                             
-                            if (currentPlayer.isAI) {
-                                toast(eventMessageBase.replace(/\n\n/g, ' ')); // AI gets a toast
-                                setTimeout(nextPlayer, 2000); // AI automatically proceeds
-                            } else {
-                                // Human player gets a modal
-                                const fullEventMessage = eventMessageBase + '\n\nLand on a Charity square to collect from the pool.';
-                                showEvent('Sudden Death', fullEventMessage); 
-                                const humanOkButton = document.getElementById('event-buttons').firstChild; 
-                                if (humanOkButton) {
-                                    humanOkButton.onclick = () => {
-                                        hideEvent();
-                                        setTimeout(nextPlayer, 1000);
-                                    };
-                                }
-                                return; // Crucial: Human interaction needed
+                            // Human player gets a modal
+                            const fullEventMessage = eventMessageBase + '\n\nLand on a Charity square to collect from the pool.';
+                            showEvent('Sudden Death', fullEventMessage); 
+                            const humanOkButton = document.getElementById('event-buttons').firstChild; 
+                            if (humanOkButton) {
+                                humanOkButton.onclick = () => {
+                                    hideEvent();
+                                    setTimeout(nextPlayer, 1000);
+                                };
                             }
+                            return; // Crucial: Human interaction needed
                         }
                         break; // End of Sudden Death case
                         
@@ -4557,25 +4466,25 @@ Industrial Age\tFuture steam punk gear\t500`;
                             industrial: { 
                                 title: "The Patent of Electricity", 
                                 value: 1250, 
-                                description: "The Patent of Electricity. Worth 1250 points.",
+                                description: "The Patent of Electricity. Worth 1250 credits.",
                                 imageUrl: "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F45CCE2C3-35F2-4E17-BE11-6E805BF7C474.png?alt=media&token=c9a08e76-78fe-4ad1-976a-462abc4dc6e8"
                             },
                             kings: { 
                                 title: "The Sword of Charlemagne", 
                                 value: 1750, 
-                                description: "The Sword of Charlemagne. Worth 1750 points.",
+                                description: "The Sword of Charlemagne. Worth 1750 credits.",
                                 imageUrl: "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F5E34659C-C8B8-4C56-B4FD-9864C48F75F7.png?alt=media&token=dd83b584-8fd4-49f1-8376-e3b71e9fd87b"
                             },
                             dark: { 
                                 title: "The Holy Grail", 
                                 value: 2000, 
-                                description: "The Holy Grail. Worth 2000 points.",
+                                description: "The Holy Grail. Worth 2000 credits.",
                                 imageUrl: "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F10C63A44-6080-4F02-A2EA-EF384AD1CFAF.png?alt=media&token=ad433c70-761e-4622-a355-30306af24cff"
                             },
                             ancient: { 
                                 title: "The Sphinx", 
                                 value: 2500, 
-                                description: "The Sphinx. Worth 2500 points.",
+                                description: "The Sphinx. Worth 2500 credits.",
                                 imageUrl: "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F33FCE8E7-9FE4-4109-8358-77D62DB1B2AE.png?alt=media&token=35ad5360-4cc8-4d02-82bd-a312c1b114cd"
                             }
                         };
@@ -4592,7 +4501,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                         sounds.treasureChestOpen.play();
                         
                         // Show the treasure
-                        toast(`${currentPlayer.name} found a major treasure: ${majorTreasure.title}! (Worth ${majorTreasure.value} points)`);
+                        toast(`${currentPlayer.name} found a major treasure: ${majorTreasure.title}! (Worth ${majorTreasure.value} credits)`);
                         setTimeout(() => {
                             showItemModal(majorTreasure);
                         }, 1000);
