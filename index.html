@@ -945,7 +945,24 @@ if (joinGameId) {
       console.log("Joined game:", joinGameId, gameData);
 
       alert(`Joined game: ${joinGameId}`);
-      // Step 3.2 will go here: Add player to game
+const newPlayer = {
+  id: window.localPlayerId,
+  name: "Player", // You can later let them choose this
+  inventory: [],
+  position: 0,
+  credits: 0,
+  isAI: false
+};
+
+db.ref(`/games/${joinGameId}/state/players/${window.localPlayerId}`).set(newPlayer)
+  .then(() => {
+    alert(`Joined game: ${joinGameId}`);
+    console.log("Player added:", newPlayer);
+  })
+  .catch(err => {
+    console.error("Failed to add player:", err);
+  });
+
     } else {
       alert("Game not found.");
     }
