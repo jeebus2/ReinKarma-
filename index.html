@@ -1301,6 +1301,16 @@ document.querySelectorAll(".player-count-btn").forEach(btn => {
 db.ref(`/games/${gameId}/state/started`).on("value", snapshot => {
   if (snapshot.val() === true) {
     console.log("Game started signal received!");
+      // 🔧 Restore entire gameState from Firebase
+db.ref(`/games/${gameId}/state`).once("value").then(stateSnap => {
+  const state = stateSnap.val();
+  if (state) {
+    gameState = state; // ✅ Set global gameState reference
+    console.log("Game state restored:", gameState);
+  } else {
+    console.warn("No game state found!");
+  }
+});
     document.getElementById("start-game-button").style.display = "none";
     document.getElementById("lobby-screen").style.display = "none";
     document.getElementById("start-screen").style.display = "none";
