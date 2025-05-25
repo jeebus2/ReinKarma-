@@ -569,11 +569,31 @@
 </head>
 <body>
         <!-- 🔁 Turn Transition Modal -->
-<div id="turn-transition-modal" style="display: none; position: fixed; z-index: 1000; top: 0; left: 0; width: 100%; height: 100%;
-  background-color: rgba(0, 0, 0, 0.85); justify-content: center; align-items: center; font-family: 'Georgia', serif;">
+<div id="turn-transition-modal" style="
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.85);
+  font-family: 'Georgia', serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+">
   <div style="border: 25px solid transparent; 
     border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2F8e83c21b-7e79-4db8-8885-ff3e3fb49a75%2F3c2248d6-9869-4034-80f2-f6203c39a934.png?alt=media&token=dff7d95b-3a38-42d2-b5b6-b306db331153');
-    border-image-slice: 40; background-color: #111; color: white; padding: 30px; text-align: center; border-radius: 12px;">
+    border-image-slice: 40;
+    background-color: #111;
+    color: white;
+    padding: 30px;
+    text-align: center;
+    border-radius: 12px;
+    max-width: 90%;
+    box-sizing: border-box;
+  ">
     <h2 id="turn-player-name" style="font-size: 1.8rem; margin-bottom: 20px;">Player's Turn</h2>
     <button id="start-turn-button" style="padding: 12px 25px; font-size: 1.1rem;">Start Turn</button>
   </div>
