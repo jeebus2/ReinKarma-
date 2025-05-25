@@ -1134,44 +1134,53 @@ if (joinGameId) {
 db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
   if (snapshot.val() === true) {
     console.log("Game started signal received (joiner)!");
-    document.getElementById("start-game-button").style.display = "none";
-    document.getElementById("lobby-screen").style.display = "none";
-    document.getElementById("start-screen").style.display = "none";
-    document.getElementById("multiplayer-setup-screen").style.display = "none";
-    document.getElementById("game-container").style.display = "block";
+   db.ref(`/games/${joinGameId}/state`).once("value").then(stateSnap => {
+      const state = stateSnap.val();
+      if (state) {
+        gameState = state;
+        console.log("Joiner game state restored:", gameState);
 
-    if (sounds.startScreen && sounds.startScreen.playing()) {
-      sounds.startScreen.stop();
-    }
+        // UI updates
+        document.getElementById("start-game-button").style.display = "none";
+        document.getElementById("lobby-screen").style.display = "none";
+        document.getElementById("start-screen").style.display = "none";
+        document.getElementById("multiplayer-setup-screen").style.display = "none";
+        document.getElementById("game-container").style.display = "block";
 
-    // Turn logic for joiner
-    db.ref(`/games/${joinGameId}/state/currentPlayerIndex`).on("value", snap => {
-      const index = snap.val();
-      if (index === null || index === undefined) return;
-
-      db.ref(`/games/${joinGameId}/state/players`).once("value").then(playerSnap => {
-        const players = playerSnap.val() || {};
-        const playerArray = Object.values(players);
-        const currentPlayer = playerArray[index];
-
-        if (!currentPlayer) return;
-
-        if (currentPlayer.id === window.localPlayerId) {
-          // Show turn modal
-          document.getElementById("turn-player-name").textContent = `${currentPlayer.name}'s Turn`;
-          document.getElementById("turn-transition-modal").style.display = "flex";
-
-          const startBtn = document.getElementById("start-turn-button");
-          startBtn.onclick = () => {
-            document.getElementById("turn-transition-modal").style.display = "none";
-            document.getElementById("roll-button").disabled = false;
-          };
-        } else {
-          // Not their turn
-          document.getElementById("turn-transition-modal").style.display = "none";
-          document.getElementById("roll-button").disabled = true;
+        if (sounds.startScreen && sounds.startScreen.playing()) {
+          sounds.startScreen.stop();
         }
-      });
+
+        // 🔁 Resume all normal turn logic
+        db.ref(`/games/${joinGameId}/state/currentPlayerIndex`).on("value", snap => {
+          const index = snap.val();
+          if (index === null || index === undefined) return;
+
+          db.ref(`/games/${joinGameId}/state/players`).once("value").then(playerSnap => {
+            const players = playerSnap.val() || {};
+            const playerArray = Object.values(players);
+            const currentPlayer = playerArray[index];
+
+            if (!currentPlayer) return;
+
+            if (currentPlayer.id === window.localPlayerId) {
+              document.getElementById("turn-player-name").textContent = `${currentPlayer.name}'s Turn`;
+              document.getElementById("turn-transition-modal").style.display = "flex";
+
+              const startBtn = document.getElementById("start-turn-button");
+              startBtn.onclick = () => {
+                document.getElementById("turn-transition-modal").style.display = "none";
+                document.getElementById("roll-button").disabled = false;
+              };
+            } else {
+              document.getElementById("turn-transition-modal").style.display = "none";
+              document.getElementById("roll-button").disabled = true;
+            }
+          });
+        });
+      } else {
+        console.warn("Joiner could not restore game state.");
+      }
     });
   }
 });
