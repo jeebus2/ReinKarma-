@@ -1230,12 +1230,27 @@ db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
             console.error("Players list read failed:", error);
            document.getElementById("connection-lost-modal").style.display = "flex";
           });
-          // Listen for game start signal (host sets started = true)
-         db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
+           // Listen for game start signal (host sets started = true)
+          db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
+            if (snapshot.val() === true) {
+              console.log("Game started signal received (joiner)!");
+              document.getElementById("start-game-button").style.display = "none";
+              document.getElementById("lobby-screen").style.display = "none";
+              document.getElementById("start-screen").style.display = "none";
+              document.getElementById("multiplayer-setup-screen").style.display = "none";
+              document.getElementById("game-container").style.display = "block";
+              if (sounds.startScreen && sounds.startScreen.playing()) {
+                sounds.startScreen.stop();
+              }
+            }
+          }); // <-- properly closes the on("value")
+
+        }) // <-- properly closes the .then
         .catch(err => {
           console.error("Failed to add player:", err);
           alert("Failed to join game. Please check your connection and try again.");
         });
+
       }; // end submitNameBtn.onclick
     }
   });
