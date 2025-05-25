@@ -1381,14 +1381,18 @@ db.ref(`/games/${gameId}/state/started`).on("value", snapshot => {
 
 // Host clicks "Start Game" (begin game when all players are ready)
 document.getElementById("start-game-button").addEventListener("click", () => {
-  // Only allow if all players have joined (button is enabled)
-  db.ref(`/games/${window.currentGameId}/state/started`).set(true).then(() => {
-    console.log("Game started by host.");
+  // Set current player index to 0 to begin with the host
+  db.ref(`/games/${window.currentGameId}/state/currentPlayerIndex`).set(0).then(() => {
+    // Then mark game as started
+    return db.ref(`/games/${window.currentGameId}/state/started`).set(true);
+  }).then(() => {
+    console.log("Game started by host. Turn starts at player index 0.");
   }).catch(err => {
     console.error("Failed to start game:", err);
     alert("Error starting the game. Please try again.");
   });
 });
+
 // 🔚 Final End Game Button (after past lives shown)
 document.getElementById("final-end-game-button").addEventListener("click", () => {
   if (window.currentGameId && window.localPlayerId && isMultiplayer) {
