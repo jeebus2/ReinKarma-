@@ -1029,479 +1029,119 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
-// Show Pause Menu
-document.getElementById("pause-button").onclick = () => {
+
+// Pause Menu Controls
+const pauseBtn = document.getElementById("pause-button");
+const resumeBtn = document.getElementById("resume-game");
+const endBtn = document.getElementById("end-game-button");
+const finalEndBtn = document.getElementById("final-end-game-button");
+
+pauseBtn.onclick = () => {
   document.getElementById("pause-menu-modal").style.display = "flex";
 };
-
-// Resume Gameplay
-document.getElementById("resume-game").onclick = () => {
+resumeBtn.onclick = () => {
   document.getElementById("pause-menu-modal").style.display = "none";
 };
-
-// End Game via Pause Menu
-document.getElementById("end-game-button").onclick = () => {
+endBtn.onclick = () => {
   if (confirm("End the current game and return to the main menu?")) {
     if (window.currentGameId) {
-      db.ref(`/games/${window.currentGameId}`).remove()
-        .then(() => {
-          alert("Game ended.");
-          location.reload();
-        })
-        .catch(err => {
-          console.error("Error ending game:", err);
-          alert("Unable to end game. Check connection.");
-        });
+      db.ref(`/games/${window.currentGameId}`).remove().then(() => location.reload())
+      .catch(err => {
+        console.error("Error ending game:", err);
+        alert("Unable to end game. Check connection.");
+      });
     }
   }
 };
-        // End Game from Final Score modal
-document.getElementById("final-end-game-button").onclick = () => {
+finalEndBtn.onclick = () => {
   if (confirm("Are you sure you want to end the game?")) {
     if (window.currentGameId) {
-      db.ref(`/games/${window.currentGameId}`).remove()
-        .then(() => {
-          alert("Game ended.");
-          location.reload();
-        })
-        .catch(err => {
-          console.error("Error ending game:", err);
-          alert("Unable to end game. Check connection.");
-        });
+      db.ref(`/games/${window.currentGameId}`).remove().then(() => location.reload())
+      .catch(err => {
+        console.error("Error ending game:", err);
+        alert("Unable to end game. Check connection.");
+      });
     }
   }
 };
-        
-// Check if joining an existing game via URL
-// 🔗 Joining an existing game via URL
+
+// Game Join via URL
 const urlParams = new URLSearchParams(window.location.search);
 const joinGameId = urlParams.get("game");
 if (joinGameId) {
   window.currentGameId = joinGameId;
-  // Reuse client ID if already joined before, otherwise generate a new one
   const savedId = localStorage.getItem(`clientId_${joinGameId}`);
-  window.localPlayerId = savedId ? savedId : generateClientId();
-  // Prepare UI: hide other screens, then prompt for name if needed
+  window.localPlayerId = savedId || generateClientId();
   document.getElementById("start-screen").style.display = "none";
   document.getElementById("multiplayer-setup-screen").style.display = "none";
   document.getElementById("lobby-screen").style.display = "none";
-  // Fetch game data from Firebase
+
   db.ref(`/games/${joinGameId}`).once("value").then(snapshot => {
     if (!snapshot.exists()) {
       alert("Game not found or no longer available.");
-      // Return to start screen if the game ID is invalid
-      document.getElementById("name-entry-modal").style.display = "none";
       document.getElementById("start-screen").style.display = "block";
       return;
     }
+
     const gameData = snapshot.val();
-    console.log("Joining game:", joinGameId, gameData);
-    // If this client was the host (rejoining), show Start Game button
+    const playersSoFar = gameData.state.players || {};
+    const totalPlayers = gameData.playerCount;
+
     if (window.localPlayerId === gameData.hostId) {
       document.getElementById("start-game-button").style.display = "inline-block";
     }
-    const playersSoFar = gameData.state.players || {};
-    // 🚫 Prevent joining if game is already full
-    if (Object.keys(playersSoFar).length >= gameData.playerCount) {
-      alert("This game is already full. You cannot join.");
-      document.getElementById("name-entry-modal").style.display = "none";
+
+    if (Object.keys(playersSoFar).length >= totalPlayers) {
+      alert("This game is already full.");
       document.getElementById("start-screen").style.display = "block";
       return;
     }
-    // 🔄 If this device already joined earlier, skip name prompt
+
     if (playersSoFar[window.localPlayerId]) {
-      const existingPlayer = playersSoFar[window.localPlayerId];
-      alert(`Rejoined the game as ${existingPlayer.name}.`);
-      // Directly show lobby (player was already added before)
-      document.getElementById("name-entry-modal").style.display = "none";
+      alert(`Rejoined as ${playersSoFar[window.localPlayerId].name}`);
       document.getElementById("lobby-screen").style.display = "block";
-      // Setup real-time lobby updates for this joiner
-      const playerListDiv = document.getElementById("player-list");
-      const lobbyCountText = document.getElementById("lobby-count");
-      const totalPlayers = gameData.playerCount;
-      db.ref(`/games/${joinGameId}/state/players`).on("value", snapshot => {
-        const players = snapshot.val() || {};
-        playerListDiv.innerHTML = "";
-        let count = 0;
-        Object.values(players).forEach(player => {
-          count++;
-          const entry = document.createElement("div");
-          entry.innerHTML = `<span style="color:${player.tokenColor};">&#x25CF;</span> ${player.name} (${player.id})`;
-          playerListDiv.appendChild(entry);
-        });
-        lobbyCountText.textContent = `${count}/${totalPlayers} players connected`;
-      }, error => {
-        console.error("Players list read failed:", error);
-     document.getElementById("connection-lost-modal").style.display = "flex";
-      });
-        
-db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
-  if (snapshot.val() === true) {
-    console.log("Game started signal received (joiner)!");
-   db.ref(`/games/${joinGameId}/state`).once("value").then(stateSnap => {
-      const state = stateSnap.val();
-      if (state) {
-        gameState = state;
-        console.log("Joiner game state restored:", gameState);
-
-        // Initialize board and players
-        const playersObj = state.players || {};
-        const playersArray = Object.values(playersObj);
-        playersArray.forEach(p => { p.color = p.tokenColor });
-        gameState.players = playersArray;
-        gameState.currentPlayerIndex = state.currentPlayerIndex || 0;
-        gameState.gameStarted = true;
-
-        createBoard();
-        populateAllCardData();
-        updatePlayerInfo();
-        placePlayerTokens();
-        setupEventListeners();
-
-        // 🔁 Start turn tracking
-        db.ref(`/games/${joinGameId}/state/currentPlayerIndex`).on("value", snap => {
-          const idx = snap.val();
-          if (idx === null || idx === undefined) return;
-          const currentPlayer = gameState.players[idx];
-          if (!currentPlayer) return;
-
-          if (currentPlayer.id === window.localPlayerId) {
-// Only show modal if game is initialized and it's this player's turn
-if (gameState.gameStarted && currentPlayer.id === window.localPlayerId) {
-  document.getElementById("turn-player-name").textContent = `${currentPlayer.name}'s Turn`;
-  document.getElementById("turn-transition-modal").style.display = "flex";
-  
-  document.getElementById("start-turn-button").onclick = () => {
-    document.getElementById("turn-transition-modal").style.display = "none";
-    document.getElementById("roll-button").disabled = false;
-  };
-} else {
-  document.getElementById("turn-transition-modal").style.display = "none";
-  document.getElementById("roll-button").disabled = true;
-}
-        });
-      } else {
-        console.warn("Joiner could not restore game state.");
-      }
-    });
-  }
-});
-
-    } else {
-      // New player on this device – show name entry modal
-      document.getElementById("name-entry-modal").style.display = "block";
-      const nameInput = document.getElementById("player-name-input");
-      const submitNameBtn = document.getElementById("name-submit-button");
-      // Allow pressing Enter to submit name
-      nameInput.addEventListener("keydown", e => {
-        if (e.key === "Enter") submitNameBtn.click();
-      });
-      submitNameBtn.onclick = () => {
-        const playerName = nameInput.value.trim();
-        if (!playerName) {
-          alert("Please enter your name to join the game.");
-          return;
-        }
-        // Add this new player to the game’s player list in Firebase
-        const colorList = ["red", "blue", "green", "orange", "magenta"];
-        const playerIndex = Object.keys(playersSoFar).length;  // next player index
-        const assignedColor = colorList[playerIndex] || "white";
-        const newPlayer = {
-          id: window.localPlayerId,
-          name: playerName,
-          tokenColor: assignedColor,
-          inventory: [],
-          position: 0,
-          credits: 0,
-          isAI: false
-        };
-        db.ref(`/games/${joinGameId}/state/players/${window.localPlayerId}`).set(newPlayer)
-        .then(() => {
-          console.log("Player added:", newPlayer);
-          // Store this client ID for future rejoins
-          localStorage.setItem(`clientId_${joinGameId}`, window.localPlayerId);
-          // Show the lobby screen now that the player is added
-          document.getElementById("name-entry-modal").style.display = "none";
-          document.getElementById("lobby-screen").style.display = "block";
-          // Real-time update of lobby player list for this joiner
-          const playerListDiv = document.getElementById("player-list");
-          const lobbyCountText = document.getElementById("lobby-count");
-          const totalPlayers = gameData.playerCount;
-          db.ref(`/games/${joinGameId}/state/players`).on("value", snapshot => {
-            const players = snapshot.val() || {};
-            playerListDiv.innerHTML = "";
-            let count = 0;
-            Object.values(players).forEach(player => {
-              count++;
-              const entry = document.createElement("div");
-              entry.innerHTML = `<span style="color:${player.tokenColor};">&#x25CF;</span> ${player.name} (${player.id})`;
-              playerListDiv.appendChild(entry);
-            });
-            lobbyCountText.textContent = `${count}/${totalPlayers} players connected`;
-          }, error => {
-            console.error("Players list read failed:", error);
-           document.getElementById("connection-lost-modal").style.display = "flex";
-          });
-
-        }) // <-- properly closes the .then
-        .catch(err => {
-          console.error("Failed to add player:", err);
-          alert("Failed to join game. Please check your connection and try again.");
-        });
-
-      }; // end submitNameBtn.onclick
+      return;
     }
-  });
-}
 
-// Host creating a new multiplayer game
-document.getElementById("start-multiplayer-button").addEventListener("click", () => {
-  isMultiplayer = true;
-  // Hide main start screen, show the multiplayer setup modal
-  document.getElementById("start-screen").style.display = "none";
-  document.getElementById("multiplayer-setup-screen").style.display = "block";
-});
+    document.getElementById("name-entry-modal").style.display = "block";
+    const nameInput = document.getElementById("player-name-input");
+    const submitBtn = document.getElementById("name-submit-button");
 
-// Handle player count selection for both modes (local or multiplayer)
-document.querySelectorAll(".player-count-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const playerCount = parseInt(btn.getAttribute("data-players"));
-    if (!isMultiplayer) {
-      // Hot-seat local game setup
-      setupPlayers(playerCount);
-    } else {
-      // Multiplayer game setup (host flow)
-      const gameId = generateGameId();
-      const hostId = generateClientId();
-      window.currentGameId = gameId;
-      window.localPlayerId = hostId;
-      const hostName = prompt("Enter your name:") || "Host";
-      // Prepare initial game data in database
-      const gameData = {
-        hostId: hostId,
-        playerCount: playerCount,
-        state: {
-          players: {},
-          currentPlayerIndex: 0,
-          board: [],
-          started: false
-        }
+    nameInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") submitBtn.click();
+    });
+
+    submitBtn.onclick = () => {
+      const playerName = nameInput.value.trim();
+      if (!playerName) return alert("Enter your name.");
+
+      const colors = ["red", "blue", "green", "orange", "magenta"];
+      const playerIndex = Object.keys(playersSoFar).length;
+      const assignedColor = colors[playerIndex] || "white";
+
+      const newPlayer = {
+        id: window.localPlayerId,
+        name: playerName,
+        tokenColor: assignedColor,
+        inventory: [],
+        position: 0,
+        credits: 0,
+        isAI: false
       };
-      db.ref(`/games/${gameId}`).set(gameData).then(() => {
-        // Add host player to the game state
-        const colorList = ["red", "blue", "green", "orange", "magenta"];
-        const hostPlayer = {
-          id: hostId,
-          name: hostName || "Host",  // default name if none entered
-          tokenColor: colorList[0],
-          inventory: [],
-          position: 0,
-          credits: 0,
-          isAI: false
-        };
-        return db.ref(`/games/${gameId}/state/players/${hostId}`).set(hostPlayer);
-      }).then(() => {
-        console.log("Multiplayer game created:", gameId);
-        // Show the lobby for the host
-        document.getElementById("multiplayer-setup-screen").style.display = "none";
+
+      db.ref(`/games/${joinGameId}/state/players/${window.localPlayerId}`).set(newPlayer)
+      .then(() => {
+        localStorage.setItem(`clientId_${joinGameId}`, window.localPlayerId);
+        document.getElementById("name-entry-modal").style.display = "none";
         document.getElementById("lobby-screen").style.display = "block";
-        // Host sees the Start Game button (disabled until ready)
-        const startGameBtn = document.getElementById("start-game-button");
-        startGameBtn.style.display = "inline-block";
-        startGameBtn.disabled = true;
-        // Real-time update of lobby player list for the host
-        const playerListDiv = document.getElementById("player-list");
-        const lobbyCountText = document.getElementById("lobby-count");
-        const totalPlayers = playerCount;
-        db.ref(`/games/${gameId}/state/players`).on("value", snapshot => {
-          const players = snapshot.val() || {};
-          playerListDiv.innerHTML = "";
-          let count = 0;
-          Object.values(players).forEach(player => {
-            count++;
-            const entry = document.createElement("div");
-            entry.innerHTML = `<span style="color:${player.tokenColor};">&#x25CF;</span> ${player.name} (${player.id})`;
-            playerListDiv.appendChild(entry);
-          });
-          // Update count and enable Start Game when all players are present
-          lobbyCountText.textContent = `${count}/${totalPlayers} players connected`;
-          if (count >= totalPlayers) {
-            startGameBtn.disabled = false;  // all players have joined, host can start
-          } else {
-            startGameBtn.disabled = true;
-          }
-        }, error => {
-          console.error("Players list read failed:", error);
-         document.getElementById("connection-lost-modal").style.display = "flex";
-        });
-        // Listen for game start signal to transition everyone to game board
-       // 🎬 Listen for game start signal and handle turn transitions
-// ... inside host's Firebase started listener ...
-db.ref(`/games/${gameId}/state/started`).on("value", snapshot => {
-  if (snapshot.val() === true) {
-    console.log("Game started signal received!");
-    // Hide lobby and menus, show game container
-    document.getElementById("start-game-button").style.display = "none";
-    document.getElementById("lobby-screen").style.display = "none";
-    document.getElementById("start-screen").style.display = "none";
-    document.getElementById("multiplayer-setup-screen").style.display = "none";
-    document.getElementById("game-container").style.display = "block";
-    
-    // **Initialize board and game state for all players**
-    db.ref(`/games/${gameId}/state/players`).once("value").then(snap => {
-      const playersObj = snap.val() || {};
-      const playersArray = Object.values(playersObj);
-      // Map each player's tokenColor to the property used by local UI (color)
-      playersArray.forEach(p => { p.color = p.tokenColor });
-      window.gameState.players = playersArray;
-      window.gameState.currentPlayerIndex = 0;  // start from first player (index 0)
-      createBoard();               // build the game board tiles
-      populateAllCardData();       // load Twist of Fate and Treasure card data
-      updatePlayerInfo();          // update on-screen player info panels
-      placePlayerTokens();         // place each player's token on the start square
-      window.gameState.gameStarted = true;
-        const gameState = {
-    players: [],
-    currentPlayerIndex: 0,
-    board: [],
-    currentEra: 'ancient',
-    /* ... other properties ... */
-    originalTreasureCards: { ancient: [], dark: [], kings: [], industrial: [] }
-};
-window.gameState = gameState;  // **Add this line to attach gameState to the global window**
-
-      setupEventListeners();       // enable roll dice, inventory, and other buttons
-    }).catch(err => {
-      console.error("Error initializing game state:", err);
-    });
-    
-    // **Listen for turn changes to handle turn modal and controls**
-    db.ref(`/games/${gameId}/state/currentPlayerIndex`).on("value", snap => {
-      const index = snap.val();
-      if (index === null || index === undefined) return;
-      db.ref(`/games/${gameId}/state/players`).once("value").then(playerSnap => {
-        const players = playerSnap.val() || {};
-        const playerList = Object.values(players);
-        const currentPlayer = playerList[index];
-        if (!currentPlayer) return;
-        if (currentPlayer.id === window.localPlayerId) {
-          // Current player's turn on this tab – show the "Start Turn" modal
-          document.getElementById("turn-player-name").textContent = `${currentPlayer.name}'s Turn`;
-          document.getElementById("turn-transition-modal").style.display = "flex";
-          const startBtn = document.getElementById("start-turn-button");
-          startBtn.onclick = () => {
-            // Player confirms start of turn: hide modal and enable controls
-            document.getElementById("turn-transition-modal").style.display = "none";
-            document.getElementById("roll-button").disabled = false;
-            // (enable other action buttons here if any)
-          };// 🧠 Initialize blank gameState object
-window.gameState = {
-  players: [],
-  currentPlayerIndex: 0,
-  board: [],
-  currentEra: 'ancient',
-  originalTreasureCards: {
-    ancient: [],
-    dark: [],
-    kings: [],
-    industrial: []
-  },
-  gameStarted: false
-};
-
-// **Initialize board and game state for all players**
-db.ref(`/games/${gameId}/state/players`).once("value").then(snap => {
-  const playersObj = snap.val() || {};
-  const playersArray = Object.values(playersObj);
-  playersArray.forEach(p => { p.color = p.tokenColor });
-  window.gameState.players = playersArray;
-  window.gameState.currentPlayerIndex = 0;
-  window.gameState.gameStarted = true;
-
-  createBoard();
-  populateAllCardData();
-  updatePlayerInfo();
-  placePlayerTokens();
-  setupEventListeners();
-}).catch(err => {
-  console.error("Error initializing game state:", err);
-});
-
-        } else {
-          // Not this player's turn – hide any modal and disable controls
-          document.getElementById("turn-transition-modal").style.display = "none";
-          document.getElementById("roll-button").disabled = true;
-        }
+      })
+      .catch(err => {
+        console.error("Join error:", err);
+        alert("Unable to join game.");
       });
-    });
-  }
-});
-        // Show shareable link for others to join (modal dialog)
-        const joinLink = `${window.location.origin}?game=${gameId}`;
-        const linkModal = document.createElement("div");
-        linkModal.innerHTML = `
-          <div style="position: fixed; top: 20%; left: 50%; transform: translateX(-50%); background: #222; color: white; padding: 20px; border: 2px solid #888; z-index: 1000; text-align: center; width: 300px; border-radius: 10px;">
-            <p><strong>Multiplayer Game Ready!</strong><br>Share this link:</p>
-            <input type="text" value="${joinLink}" readonly style="width: 100%; padding: 5px; margin-bottom: 10px;" id="game-link-input">
-            <button id="copy-link-btn" style="padding: 5px 15px; margin-right: 10px;">Copy Link</button>
-            <button id="close-link-modal" style="padding: 5px 15px;">Close</button>
-          </div>
-        `;
-        document.body.appendChild(linkModal);
-        document.getElementById("copy-link-btn").onclick = () => {
-          const input = document.getElementById("game-link-input");
-          input.select();
-          input.setSelectionRange(0, 99999);
-          navigator.clipboard.writeText(input.value);
-          alert("Link copied to clipboard!");
-        };
-        document.getElementById("close-link-modal").onclick = () => {
-          linkModal.remove();
-        };
-      }).catch(err => {
-        console.error("Failed to create multiplayer game:", err);
-        alert("Failed to start multiplayer game. Please check your connection and try again.");
-      });
-    }
+    };
   });
-});
-
-// Host clicks "Start Game" (begin game when all players are ready)
-document.getElementById("start-game-button").addEventListener("click", () => {
-  // Set current player index to 0 to begin with the host
-  db.ref(`/games/${window.currentGameId}/state/currentPlayerIndex`).set(0).then(() => {
-    // Then mark game as started
-    return db.ref(`/games/${window.currentGameId}/state/started`).set(true);
-  }).then(() => {
-    console.log("Game started by host. Turn starts at player index 0.");
-  }).catch(err => {
-    console.error("Failed to start game:", err);
-    alert("Error starting the game. Please try again.");
-  });
-});
-
-// 🔚 Final End Game Button (after past lives shown)
-document.getElementById("final-end-game-button").addEventListener("click", () => {
-  if (window.currentGameId && window.localPlayerId && isMultiplayer) {
-    db.ref(`/games/${window.currentGameId}`).remove().then(() => {
-      console.log("Game session removed from Firebase.");
-    }).catch(err => {
-      console.warn("Failed to delete game session:", err);
-    });
-  }
-
-  // Hide all game views
-  document.getElementById("past-life-modal").style.display = "none";
-  document.getElementById("game-container").style.display = "none";
-  document.getElementById("lobby-screen").style.display = "none";
-  document.getElementById("multiplayer-setup-screen").style.display = "none";
-  document.getElementById("start-screen").style.display = "block";
-
-  // Clear session
-  window.currentGameId = null;
-  window.localPlayerId = null;
-  localStorage.clear();
-});
+}
 
         const sounds = {
             evilEye: new Howl({
