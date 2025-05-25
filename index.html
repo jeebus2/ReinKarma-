@@ -8,7 +8,7 @@
     <style>
         #turn-transition-modal {
             position: fixed;
-            top: 50%;
+           /* top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             background-color: rgba(0, 0, 0, 0.85);
@@ -569,35 +569,23 @@
 </head>
 <body>
         <!-- 🔁 Turn Transition Modal -->
-<div id="turn-transition-modal" style="
-  display: none;
-  position: fixed;
-  z-index: 1000;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.85);
-  font-family: 'Georgia', serif;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-">
-  <div style="border: 25px solid transparent; 
-    border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2F8e83c21b-7e79-4db8-8885-ff3e3fb49a75%2F3c2248d6-9869-4034-80f2-f6203c39a934.png?alt=media&token=dff7d95b-3a38-42d2-b5b6-b306db331153');
-    border-image-slice: 40;
-    background-color: #111;
-    color: white;
-    padding: 30px;
-    text-align: center;
-    border-radius: 12px;
-    max-width: 90%;
-    box-sizing: border-box;
-  ">
-    <h2 id="turn-player-name" style="font-size: 1.8rem; margin-bottom: 20px;">Player's Turn</h2>
-    <button id="start-turn-button" style="padding: 12px 25px; font-size: 1.1rem;">Start Turn</button>
+<!-- Turn Transition Modal (centered overlay) -->
+<div id="turn-transition-modal" style="display: none; position: fixed; z-index: 1000;
+     top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85);
+     font-family: 'Georgia', serif; display: flex; justify-content: center; align-items: center;">
+  <div style="border: 25px solid transparent;
+       border-image-source: url('.../frame-border.png');
+       border-image-slice: 40; background-color: #111; color: white;
+       padding: 30px; text-align: center; border-radius: 12px; max-width: 90%;">
+    <h2 id="turn-player-name" style="font-size: 1.8rem; margin-bottom: 20px;">
+      Player's Turn
+    </h2>
+    <button id="start-turn-button" style="padding: 12px 25px; font-size: 1.1rem;">
+      Start Turn
+    </button>
   </div>
 </div>
+<!-- (Removed the older duplicate #turn-transition-modal element that caused conflicts) -->
     <!-- 📝 Name Entry Modal -->
 <div id="name-entry-modal" style="display: none; position: fixed; z-index: 1000; top: 0; left: 0; width: 100%; height: 100%;
   background-color: rgba(0, 0, 0, 0.8); font-family: 'Georgia', serif; justify-content: center; align-items: center;">
@@ -989,11 +977,6 @@
 </div>
     </div>
 
-    <div id="turn-transition-modal">
-        <h3 id="turn-transition-player-name"></h3>
-        <p id="turn-transition-message">It's your turn!</p>
-        <button id="turn-transition-ok-button">Start Turn</button>
-    </div>
     <!-- 🛑 Pause / End Game Modal -->
 <div id="pause-menu-modal" style="display: none; position: fixed; top: 0; left: 0; z-index: 9999; width: 100%; height: 100%;
   background-color: rgba(0,0,0,0.85); font-family: Georgia, serif; justify-content: center; align-items: center;">
@@ -1160,43 +1143,38 @@ db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
         gameState = state;
         console.log("Joiner game state restored:", gameState);
 
-        // UI updates
-        document.getElementById("start-game-button").style.display = "none";
-        document.getElementById("lobby-screen").style.display = "none";
-        document.getElementById("start-screen").style.display = "none";
-        document.getElementById("multiplayer-setup-screen").style.display = "none";
-        document.getElementById("game-container").style.display = "block";
+        // Initialize board and players
+        const playersObj = state.players || {};
+        const playersArray = Object.values(playersObj);
+        playersArray.forEach(p => { p.color = p.tokenColor });
+        gameState.players = playersArray;
+        gameState.currentPlayerIndex = state.currentPlayerIndex || 0;
+        gameState.gameStarted = true;
 
-        if (sounds.startScreen && sounds.startScreen.playing()) {
-          sounds.startScreen.stop();
-        }
+        createBoard();
+        populateAllCardData();
+        updatePlayerInfo();
+        placePlayerTokens();
+        setupEventListeners();
 
-        // 🔁 Resume all normal turn logic
+        // 🔁 Start turn tracking
         db.ref(`/games/${joinGameId}/state/currentPlayerIndex`).on("value", snap => {
-          const index = snap.val();
-          if (index === null || index === undefined) return;
+          const idx = snap.val();
+          if (idx === null || idx === undefined) return;
+          const currentPlayer = gameState.players[idx];
+          if (!currentPlayer) return;
 
-          db.ref(`/games/${joinGameId}/state/players`).once("value").then(playerSnap => {
-            const players = playerSnap.val() || {};
-            const playerArray = Object.values(players);
-            const currentPlayer = playerArray[index];
-
-            if (!currentPlayer) return;
-
-            if (currentPlayer.id === window.localPlayerId) {
-              document.getElementById("turn-player-name").textContent = `${currentPlayer.name}'s Turn`;
-              document.getElementById("turn-transition-modal").style.display = "flex";
-
-              const startBtn = document.getElementById("start-turn-button");
-              startBtn.onclick = () => {
-                document.getElementById("turn-transition-modal").style.display = "none";
-                document.getElementById("roll-button").disabled = false;
-              };
-            } else {
+          if (currentPlayer.id === window.localPlayerId) {
+            document.getElementById("turn-player-name").textContent = `${currentPlayer.name}'s Turn`;
+            document.getElementById("turn-transition-modal").style.display = "flex";
+            document.getElementById("start-turn-button").onclick = () => {
               document.getElementById("turn-transition-modal").style.display = "none";
-              document.getElementById("roll-button").disabled = true;
-            }
-          });
+              document.getElementById("roll-button").disabled = false;
+            };
+          } else {
+            document.getElementById("turn-transition-modal").style.display = "none";
+            document.getElementById("roll-button").disabled = true;
+          }
         });
       } else {
         console.warn("Joiner could not restore game state.");
@@ -1204,6 +1182,7 @@ db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
     });
   }
 });
+
     } else {
       // New player on this device – show name entry modal
       document.getElementById("name-entry-modal").style.display = "block";
@@ -1259,20 +1238,6 @@ db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
             console.error("Players list read failed:", error);
            document.getElementById("connection-lost-modal").style.display = "flex";
           });
-           // Listen for game start signal (host sets started = true)
-          db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
-            if (snapshot.val() === true) {
-              console.log("Game started signal received (joiner)!");
-              document.getElementById("start-game-button").style.display = "none";
-              document.getElementById("lobby-screen").style.display = "none";
-              document.getElementById("start-screen").style.display = "none";
-              document.getElementById("multiplayer-setup-screen").style.display = "none";
-              document.getElementById("game-container").style.display = "block";
-              if (sounds.startScreen && sounds.startScreen.playing()) {
-                sounds.startScreen.stop();
-              }
-            }
-          }); // <-- properly closes the on("value")
 
         }) // <-- properly closes the .then
         .catch(err => {
@@ -1391,6 +1356,16 @@ db.ref(`/games/${gameId}/state/started`).on("value", snapshot => {
       updatePlayerInfo();          // update on-screen player info panels
       placePlayerTokens();         // place each player's token on the start square
       window.gameState.gameStarted = true;
+        const gameState = {
+    players: [],
+    currentPlayerIndex: 0,
+    board: [],
+    currentEra: 'ancient',
+    /* ... other properties ... */
+    originalTreasureCards: { ancient: [], dark: [], kings: [], industrial: [] }
+};
+window.gameState = gameState;  // **Add this line to attach gameState to the global window**
+
       setupEventListeners();       // enable roll dice, inventory, and other buttons
     }).catch(err => {
       console.error("Error initializing game state:", err);
@@ -1415,7 +1390,39 @@ db.ref(`/games/${gameId}/state/started`).on("value", snapshot => {
             document.getElementById("turn-transition-modal").style.display = "none";
             document.getElementById("roll-button").disabled = false;
             // (enable other action buttons here if any)
-          };
+          };// 🧠 Initialize blank gameState object
+window.gameState = {
+  players: [],
+  currentPlayerIndex: 0,
+  board: [],
+  currentEra: 'ancient',
+  originalTreasureCards: {
+    ancient: [],
+    dark: [],
+    kings: [],
+    industrial: []
+  },
+  gameStarted: false
+};
+
+// **Initialize board and game state for all players**
+db.ref(`/games/${gameId}/state/players`).once("value").then(snap => {
+  const playersObj = snap.val() || {};
+  const playersArray = Object.values(playersObj);
+  playersArray.forEach(p => { p.color = p.tokenColor });
+  window.gameState.players = playersArray;
+  window.gameState.currentPlayerIndex = 0;
+  window.gameState.gameStarted = true;
+
+  createBoard();
+  populateAllCardData();
+  updatePlayerInfo();
+  placePlayerTokens();
+  setupEventListeners();
+}).catch(err => {
+  console.error("Error initializing game state:", err);
+});
+
         } else {
           // Not this player's turn – hide any modal and disable controls
           document.getElementById("turn-transition-modal").style.display = "none";
