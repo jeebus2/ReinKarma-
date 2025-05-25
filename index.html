@@ -1130,17 +1130,51 @@ if (joinGameId) {
         console.error("Players list read failed:", error);
      document.getElementById("connection-lost-modal").style.display = "flex";
       });
-      // Listen for game start signal to transition to game board
-      db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
-        if (snapshot.val() === true) {
-          console.log("Game started signal received (rejoiner)!");
-          // Hide lobby and show game interface
-          document.getElementById("start-game-button").style.display = "none";
-          document.getElementById("lobby-screen").style.display = "none";
-          document.getElementById("game-container").style.display = "block";
-          // (Turn transition handling will be managed by the on("value") listener for currentPlayerIndex)
+        
+db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
+  if (snapshot.val() === true) {
+    console.log("Game started signal received (joiner)!");
+    document.getElementById("start-game-button").style.display = "none";
+    document.getElementById("lobby-screen").style.display = "none";
+    document.getElementById("start-screen").style.display = "none";
+    document.getElementById("multiplayer-setup-screen").style.display = "none";
+    document.getElementById("game-container").style.display = "block";
+
+    if (sounds.startScreen && sounds.startScreen.playing()) {
+      sounds.startScreen.stop();
+    }
+
+    // Turn logic for joiner
+    db.ref(`/games/${joinGameId}/state/currentPlayerIndex`).on("value", snap => {
+      const index = snap.val();
+      if (index === null || index === undefined) return;
+
+      db.ref(`/games/${joinGameId}/state/players`).once("value").then(playerSnap => {
+        const players = playerSnap.val() || {};
+        const playerArray = Object.values(players);
+        const currentPlayer = playerArray[index];
+
+        if (!currentPlayer) return;
+
+        if (currentPlayer.id === window.localPlayerId) {
+          // Show turn modal
+          document.getElementById("turn-player-name").textContent = `${currentPlayer.name}'s Turn`;
+          document.getElementById("turn-transition-modal").style.display = "flex";
+
+          const startBtn = document.getElementById("start-turn-button");
+          startBtn.onclick = () => {
+            document.getElementById("turn-transition-modal").style.display = "none";
+            document.getElementById("roll-button").disabled = false;
+          };
+        } else {
+          // Not their turn
+          document.getElementById("turn-transition-modal").style.display = "none";
+          document.getElementById("roll-button").disabled = true;
         }
       });
+    });
+  }
+});
     } else {
       // New player on this device – show name entry modal
       document.getElementById("name-entry-modal").style.display = "block";
@@ -1197,16 +1231,7 @@ if (joinGameId) {
            document.getElementById("connection-lost-modal").style.display = "flex";
           });
           // Listen for game start signal (host sets started = true)
-          db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
-            if (snapshot.val() === true) {
-              console.log("Game started signal received (joiner)!");
-              document.getElementById("start-game-button").style.display = "none";
-              document.getElementById("lobby-screen").style.display = "none";
-              document.getElementById("game-container").style.display = "block";
-              // Turn transition handling is managed by the currentPlayerIndex listener
-            }
-          });
-        })
+         db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
         .catch(err => {
           console.error("Failed to add player:", err);
           alert("Failed to join game. Please check your connection and try again.");
@@ -1298,63 +1323,60 @@ document.querySelectorAll(".player-count-btn").forEach(btn => {
         });
         // Listen for game start signal to transition everyone to game board
        // 🎬 Listen for game start signal and handle turn transitions
+// ... inside host's Firebase started listener ...
 db.ref(`/games/${gameId}/state/started`).on("value", snapshot => {
   if (snapshot.val() === true) {
     console.log("Game started signal received!");
-      // 🔧 Restore entire gameState from Firebase
-db.ref(`/games/${gameId}/state`).once("value").then(stateSnap => {
-  const state = stateSnap.val();
-  if (state) {
-    gameState = state; // ✅ Set global gameState reference
-    console.log("Game state restored:", gameState);
-  } else {
-    console.warn("No game state found!");
-  }
-});
+    // Hide lobby and menus, show game container
     document.getElementById("start-game-button").style.display = "none";
     document.getElementById("lobby-screen").style.display = "none";
     document.getElementById("start-screen").style.display = "none";
     document.getElementById("multiplayer-setup-screen").style.display = "none";
     document.getElementById("game-container").style.display = "block";
-
-    // Stop music if playing
-    if (sounds.startScreen && sounds.startScreen.playing()) {
-      sounds.startScreen.stop();
-    }
-
-    // 🌀 Listen for whose turn it is
+    
+    // **Initialize board and game state for all players**
+    db.ref(`/games/${gameId}/state/players`).once("value").then(snap => {
+      const playersObj = snap.val() || {};
+      const playersArray = Object.values(playersObj);
+      // Map each player's tokenColor to the property used by local UI (color)
+      playersArray.forEach(p => { p.color = p.tokenColor });
+      window.gameState.players = playersArray;
+      window.gameState.currentPlayerIndex = 0;  // start from first player (index 0)
+      createBoard();               // build the game board tiles
+      populateAllCardData();       // load Twist of Fate and Treasure card data
+      updatePlayerInfo();          // update on-screen player info panels
+      placePlayerTokens();         // place each player's token on the start square
+      window.gameState.gameStarted = true;
+      setupEventListeners();       // enable roll dice, inventory, and other buttons
+    }).catch(err => {
+      console.error("Error initializing game state:", err);
+    });
+    
+    // **Listen for turn changes to handle turn modal and controls**
     db.ref(`/games/${gameId}/state/currentPlayerIndex`).on("value", snap => {
       const index = snap.val();
       if (index === null || index === undefined) return;
-
       db.ref(`/games/${gameId}/state/players`).once("value").then(playerSnap => {
         const players = playerSnap.val() || {};
-        const playerArray = Object.values(players);
-        const currentPlayer = playerArray[index];
-
+        const playerList = Object.values(players);
+        const currentPlayer = playerList[index];
         if (!currentPlayer) return;
-
-  if (currentPlayer.id === window.localPlayerId) {
-  // Show the parchment-style turn modal
-  document.getElementById("turn-player-name").textContent = `${currentPlayer.name}'s Turn`;
-  document.getElementById("turn-transition-modal").style.display = "flex";
-
-  const startBtn = document.getElementById("start-turn-button");
-  startBtn.onclick = () => {
-    document.getElementById("turn-transition-modal").style.display = "none";
-
-    // ✅ ENABLE controls for current player
-    document.getElementById("roll-button").disabled = false;
-    // Add other buttons here as needed
-  };
-} else {
-  // Hide modal if not current player
-  document.getElementById("turn-transition-modal").style.display = "none";
-
-  // ✅ DISABLE controls for non-active players
-  document.getElementById("roll-button").disabled = true;
-  // Add other buttons here as needed
-}
+        if (currentPlayer.id === window.localPlayerId) {
+          // Current player's turn on this tab – show the "Start Turn" modal
+          document.getElementById("turn-player-name").textContent = `${currentPlayer.name}'s Turn`;
+          document.getElementById("turn-transition-modal").style.display = "flex";
+          const startBtn = document.getElementById("start-turn-button");
+          startBtn.onclick = () => {
+            // Player confirms start of turn: hide modal and enable controls
+            document.getElementById("turn-transition-modal").style.display = "none";
+            document.getElementById("roll-button").disabled = false;
+            // (enable other action buttons here if any)
+          };
+        } else {
+          // Not this player's turn – hide any modal and disable controls
+          document.getElementById("turn-transition-modal").style.display = "none";
+          document.getElementById("roll-button").disabled = true;
+        }
       });
     });
   }
