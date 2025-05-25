@@ -1051,6 +1051,22 @@ document.getElementById("end-game-button").onclick = () => {
     }
   }
 };
+        // End Game from Final Score modal
+document.getElementById("final-end-game-button").onclick = () => {
+  if (confirm("Are you sure you want to end the game?")) {
+    if (window.currentGameId) {
+      db.ref(`/games/${window.currentGameId}`).remove()
+        .then(() => {
+          alert("Game ended.");
+          location.reload();
+        })
+        .catch(err => {
+          console.error("Error ending game:", err);
+          alert("Unable to end game. Check connection.");
+        });
+    }
+  }
+};
         
 // Check if joining an existing game via URL
 // 🔗 Joining an existing game via URL
