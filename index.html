@@ -4872,5 +4872,120 @@ Industrial Age\tFuture steam punk gear\t500`;
             }
         }
     </script>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBJXHRD2xs75a7icYk8Njygc30LhZFdjtY",
+  authDomain: "reinkarma-be704.firebaseapp.com",
+  databaseURL: "https://reinkarma-be704-default-rtdb.firebaseio.com",
+  projectId: "reinkarma-be704",
+  storageBucket: "reinkarma-be704.appspot.com",
+  messagingSenderId: "622953179983",
+  appId: "1:622953179983:web:61fe806b729e82ef29733a"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+</script>
+
+
+<!-- Multiplayer Logic -->
+<script>
+
+// Assign clientId and gameId
+let gameId = localStorage.getItem("reinkarma_game_id");
+let clientId = localStorage.getItem("reinkarma_client_id");
+if (!clientId) {
+  clientId = 'client-' + Math.random().toString(36).substr(2, 9);
+  localStorage.setItem("reinkarma_client_id", clientId);
+}
+
+// Join game
+function joinGame(playerName) {
+  gameId = gameId || 'game-' + Math.random().toString(36).substr(2, 9);
+  localStorage.setItem("reinkarma_game_id", gameId);
+  const playerRef = db.ref(`/games/${gameId}/state/players/${clientId}`);
+  return playerRef.set({
+    id: clientId,
+    name: playerName,
+    credits: 1500,
+    inventory: [],
+    position: 0
+  });
+}
+
+// Render lobby
+function renderLobby() {
+  const list = document.getElementById("player-list");
+  db.ref(`/games/${gameId}/state/players`).on("value", snapshot => {
+    list.innerHTML = "";
+    const players = snapshot.val() || {};
+    for (let id in players) {
+      const item = document.createElement("div");
+      item.textContent = players[id].name;
+      list.appendChild(item);
+    }
+  });
+}
+
+// Start game
+document.getElementById("join-game-button").onclick = () => {
+  const name = document.getElementById("player-name-input").value.trim();
+  if (!name) return alert("Enter name");
+  joinGame(name).then(() => {
+    document.getElementById("multiplayer-setup-screen").style.display = "none";
+    document.getElementById("lobby-screen").style.display = "flex";
+    renderLobby();
+  });
+};
+
+document.getElementById("start-game-button").onclick = () => {
+  db.ref(`/games/${gameId}/state`).once("value").then(snapshot => {
+    const playerList = Object.keys(snapshot.val().players || {});
+    const firstId = playerList[0];
+    db.ref(`/games/${gameId}/state`).update({ currentPlayerId: firstId, started: true });
+  });
+  document.getElementById("lobby-screen").style.display = "none";
+};
+
+// Reconnect logic
+async function reconnectToGame() {
+  if (!gameId || !clientId) return false;
+  const snap = await db.ref(`/games/${gameId}/state/players/${clientId}`).once("value");
+  if (!snap.exists()) {
+    localStorage.removeItem("reinkarma_game_id");
+    localStorage.removeItem("reinkarma_client_id");
+    return false;
+  }
+  const startedSnap = await db.ref(`/games/${gameId}/state/started`).once("value");
+  if (startedSnap.val()) {
+    document.getElementById("multiplayer-setup-screen").style.display = "none";
+    document.getElementById("lobby-screen").style.display = "none";
+    listenForTurn();
+    restrictEventsToCurrentPlayer?.();
+  } else {
+    document.getElementById("multiplayer-setup-screen").style.display = "none";
+    document.getElementById("lobby-screen").style.display = "flex";
+    renderLobby();
+  }
+  return true;
+}
+
+// Onload boot logic
+window.addEventListener("load", async () => {
+  const reconnected = await reconnectToGame();
+  const joined = localStorage.getItem("reinkarma_game_id") && localStorage.getItem("reinkarma_client_id");
+
+  if (!reconnected && !joined) {
+    document.getElementById("multiplayer-setup-screen").style.display = "flex";
+  } else if (!reconnected) {
+    document.getElementById("lobby-screen").style.display = "flex";
+    renderLobby();
+  }
+});
+</script>
+
 </body>
 </html>
