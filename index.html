@@ -959,7 +959,14 @@
         <hr style="border-color: rgba(255,255,255,0.3); margin-bottom:15px;">
         <p id="past-life-text" style="white-space: pre-wrap; text-align: left; font-size: 0.95rem; line-height: 1.5; margin-bottom: 10px;"></p>
         <h5 id="past-life-title" style="font-style: italic; font-size: 1.1rem; margin-top: 15px; margin-bottom: 20px;"></h5>
-        <button id="next-past-life-button" style="padding: 12px 20px; font-size: 1rem;">Next Player</button>
+      <div style="margin-top: 20px;">
+  <button id="next-past-life-button" style="padding: 10px 20px; font-size: 1rem; margin-right: 10px;">
+    Next Player
+  </button>
+  <button id="final-end-game-button" style="padding: 10px 20px; font-size: 1rem; background-color: #f44336; color: white;">
+    End Game
+  </button>
+</div>
     </div>
 
     <div id="turn-transition-modal">
@@ -967,7 +974,23 @@
         <p id="turn-transition-message">It's your turn!</p>
         <button id="turn-transition-ok-button">Start Turn</button>
     </div>
-    
+    <!-- 🛑 Pause / End Game Modal -->
+<div id="pause-menu-modal" style="display: none; position: fixed; top: 0; left: 0; z-index: 9999; width: 100%; height: 100%;
+  background-color: rgba(0,0,0,0.85); font-family: Georgia, serif; justify-content: center; align-items: center;">
+  <div style="border: 25px solid transparent; 
+    border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2F8e83c21b-7e79-4db8-8885-ff3e3fb49a75%2F3c2248d6-9869-4034-80f2-f6203c39a934.png?alt=media&token=dff7d95b-3a38-42d2-b5b6-b306db331153');
+    border-image-slice: 40; background-color: #111; color: white; padding: 30px; text-align: center; border-radius: 12px;">
+    <h2>Game Menu</h2>
+    <button id="resume-game" style="margin: 10px; padding: 10px 20px;">Resume Game</button><br>
+    <button id="end-game-button" style="margin: 10px; padding: 10px 20px;">End Game</button>
+  </div>
+</div>
+
+<!-- ⏸ Floating Pause Button -->
+<button id="pause-button" style="position: fixed; bottom: 15px; right: 15px; padding: 10px 15px; font-size: 1rem; z-index: 1000;">
+  ⏸️
+</button>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -1002,6 +1025,33 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+// Show Pause Menu
+document.getElementById("pause-button").onclick = () => {
+  document.getElementById("pause-menu-modal").style.display = "flex";
+};
+
+// Resume Gameplay
+document.getElementById("resume-game").onclick = () => {
+  document.getElementById("pause-menu-modal").style.display = "none";
+};
+
+// End Game via Pause Menu
+document.getElementById("end-game-button").onclick = () => {
+  if (confirm("End the current game and return to the main menu?")) {
+    if (window.currentGameId) {
+      db.ref(`/games/${window.currentGameId}`).remove()
+        .then(() => {
+          alert("Game ended.");
+          location.reload();
+        })
+        .catch(err => {
+          console.error("Error ending game:", err);
+          alert("Unable to end game. Check connection.");
+        });
+    }
+  }
+};
+        
 // Check if joining an existing game via URL
 // 🔗 Joining an existing game via URL
 const urlParams = new URLSearchParams(window.location.search);
@@ -1322,6 +1372,28 @@ document.getElementById("start-game-button").addEventListener("click", () => {
     console.error("Failed to start game:", err);
     alert("Error starting the game. Please try again.");
   });
+});
+// 🔚 Final End Game Button (after past lives shown)
+document.getElementById("final-end-game-button").addEventListener("click", () => {
+  if (window.currentGameId && window.localPlayerId && isMultiplayer) {
+    db.ref(`/games/${window.currentGameId}`).remove().then(() => {
+      console.log("Game session removed from Firebase.");
+    }).catch(err => {
+      console.warn("Failed to delete game session:", err);
+    });
+  }
+
+  // Hide all game views
+  document.getElementById("past-life-modal").style.display = "none";
+  document.getElementById("game-container").style.display = "none";
+  document.getElementById("lobby-screen").style.display = "none";
+  document.getElementById("multiplayer-setup-screen").style.display = "none";
+  document.getElementById("start-screen").style.display = "block";
+
+  // Clear session
+  window.currentGameId = null;
+  window.localPlayerId = null;
+  localStorage.clear();
 });
 
         const sounds = {
