@@ -6,26 +6,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ReinKarma</title>
     <style>
-        #turn-transition-modal {
-            position: fixed;
-           /* top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.85);
-            color: white;
-            padding: 25px;
-            z-index: 200; /* Ensure it's on top of most things */
-            max-width: 80%;
-            width: 400px;
-            display: none;
-            text-align: center;
-            border-style: solid;
-            border-width: 30px;
-            border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee');
-            border-image-slice: 40;
-            border-image-repeat: stretch;
-            box-shadow: 0 0 25px rgba(0, 0, 0, 0.6);
-        }
+#turn-transition-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 25px;
+    z-index: 200; /* Ensure it's on top */
+    max-width: 80%;
+    width: 400px;
+    display: none;
+    text-align: center;
+    border-style: solid;
+    border-width: 30px;
+    border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee');
+    border-image-slice: 40;
+    border-image-repeat: stretch;
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.6);
+    border-radius: 8px;
+}
 
         #turn-transition-modal h3 {
             margin-top: 0;
@@ -1165,16 +1166,19 @@ db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
           if (!currentPlayer) return;
 
           if (currentPlayer.id === window.localPlayerId) {
-            document.getElementById("turn-player-name").textContent = `${currentPlayer.name}'s Turn`;
-            document.getElementById("turn-transition-modal").style.display = "flex";
-            document.getElementById("start-turn-button").onclick = () => {
-              document.getElementById("turn-transition-modal").style.display = "none";
-              document.getElementById("roll-button").disabled = false;
-            };
-          } else {
-            document.getElementById("turn-transition-modal").style.display = "none";
-            document.getElementById("roll-button").disabled = true;
-          }
+// Only show modal if game is initialized and it's this player's turn
+if (gameState.gameStarted && currentPlayer.id === window.localPlayerId) {
+  document.getElementById("turn-player-name").textContent = `${currentPlayer.name}'s Turn`;
+  document.getElementById("turn-transition-modal").style.display = "flex";
+  
+  document.getElementById("start-turn-button").onclick = () => {
+    document.getElementById("turn-transition-modal").style.display = "none";
+    document.getElementById("roll-button").disabled = false;
+  };
+} else {
+  document.getElementById("turn-transition-modal").style.display = "none";
+  document.getElementById("roll-button").disabled = true;
+}
         });
       } else {
         console.warn("Joiner could not restore game state.");
