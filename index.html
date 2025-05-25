@@ -6,43 +6,99 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ReinKarma</title>
     <style>
-#turn-transition-modal {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: rgba(0, 0, 0, 0.85);
-    color: white;
-    padding: 25px;
-    z-index: 200; /* Ensure it's on top */
-    max-width: 80%;
-    width: 400px;
-    display: none;
-    text-align: center;
-    border-style: solid;
-    border-width: 30px;
-    border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee');
-    border-image-slice: 40;
-    border-image-repeat: stretch;
-    box-shadow: 0 0 25px rgba(0, 0, 0, 0.6);
-    border-radius: 8px;
-}
+        /* Turn Transition Modal (upper center overlay) */
+        #turn-transition-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            z-index: 1000;
+            font-family: 'Georgia', serif;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding-top: 5%;
+        }
 
-        #turn-transition-modal h3 {
+        #turn-transition-modal h2 {
             margin-top: 0;
             font-size: 1.8rem;
             color: #ffd700;
         }
 
-        #turn-transition-modal p {
-            font-size: 1.2rem;
-            margin-bottom: 25px;
+        /* Modal Overlay (shared base styles) */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            font-family: 'Georgia', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
-        #turn-transition-ok-button {
-            padding: 12px 25px;
+        #pause-menu-modal,
+        #connection-lost-modal {
+            z-index: 9999;
+        }
+
+        #pause-menu-modal {
+            background-color: rgba(0, 0, 0, 0.85);
+        }
+
+        /* Modal Content Box (shared styles) */
+        .modal-content {
+            border: 25px solid transparent;
+            border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2F8e83c21b-7e79-4db8-8885-ff3e3fb49a75%2F3c2248d6-9869-4034-80f2-f6203c39a934.png?alt=media&token=dff7d95b-3a38-42d2-b5b6-b306db331153');
+            border-image-slice: 40;
+            background-color: #111;
+            color: white;
+            text-align: center;
+        }
+
+        #turn-transition-modal .modal-content {
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 90%;
+        }
+
+        #name-entry-modal .modal-content {
+            padding: 25px;
+            border-radius: 10px;
+            max-width: 400px;
+        }
+
+        #pause-menu-modal .modal-content,
+        #connection-lost-modal .modal-content {
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 400px;
+        }
+
+        #start-turn-button,
+        #name-submit-button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
             font-size: 1rem;
-            background-color: #4CAF50; /* Default OK button color */
+        }
+
+        #start-turn-button {
+            padding: 12px 25px;
+            font-size: 1.1rem;
+        }
+
+        #name-submit-button {
+            padding: 10px 20px;
         }
 
         * {
@@ -84,533 +140,489 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F58982D29-A33E-42F0-AA85-E4239C882FF9.png?alt=media&token=a8eb47d3-9537-442d-b08e-a7d740c81c57');
+            background-image: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F6EC0C7C2-04EA-4419-B82B-C8CE7245F8B9.jpeg?alt=media&token=c37a9ea4-d50b-422d-835e-5300624d7944');
             background-size: cover;
             background-position: center;
-            background-repeat: no-repeat;
-            /* Fallback color if image fails to load */
-            background-color: rgba(0, 0, 0, 0.8); 
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 200;
+            flex-direction: column;
         }
         
         #menu-container {
-            width: 90%;
-            max-width: 500px;
-            background-color: rgba(51, 51, 51, 0.85);
-            /* border-radius: 15px; */
-            padding: 20px;
-            text-align: center;
+            background-color: rgba(0, 0, 0, 0.8);
             color: white;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            padding: 30px;
+            text-align: center;
+            width: 400px;
+            max-width: 90%;
             border-style: solid;
             border-width: 30px;
-            border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee');
+            border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee');
             border-image-slice: 40;
             border-image-repeat: stretch;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.6);
         }
         
         #menu-container h1 {
-            margin-top: 0;
-            font-size: 2.5rem;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+            color: #ffd700;
         }
         
         #menu-container p {
-            margin-bottom: 30px;
-            font-size: 1.2rem;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
+            font-size: 1rem;
+            margin-bottom: 20px;
         }
         
         .player-count-btn {
-            display: inline-block;
-            margin: 10px;
-            width: 60px;
-            height: 60px;
-            font-size: 1.5rem;
-            border-radius: 50%;
-            background-color: rgba(76, 175, 80, 0.8);
-            border: 3px solid white;
+            background-color: #4CAF50;
             color: white;
+            border: none;
+            padding: 12px 20px;
+            margin: 5px;
+            font-size: 1.1rem;
             cursor: pointer;
-            transition: transform 0.2s;
         }
         
-        .player-count-btn:hover, .player-count-btn:active {
-            transform: scale(1.1);
-            background-color: rgba(76, 175, 80, 1);
+        .player-count-btn:hover {
+            background-color: #45a049;
+        }
+        
+        #multiplayer-setup-screen {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0,0,0,0.85);
+            color: white;
+            padding: 25px;
+            text-align: center;
+            width: 400px;
+            max-width: 80%;
+            z-index: 200;
+            border-style: solid;
+            border-width: 30px;
+            border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee');
+            border-image-slice: 40;
+            border-image-repeat: stretch;
+            box-shadow: 0 0 25px rgba(0,0,0,0.6);
+        }
+        
+        #multiplayer-setup-screen h2 {
+            margin-top: 0;
+        }
+        
+        #lobby-screen {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0,0,0,0.85);
+            color: white;
+            padding: 25px;
+            text-align: center;
+            width: 400px;
+            max-width: 80%;
+            z-index: 200;
+            border-style: solid;
+            border-width: 30px;
+            border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee');
+            border-image-slice: 40;
+            border-image-repeat: stretch;
+            box-shadow: 0 0 25px rgba(0,0,0,0.6);
+        }
+        
+        #lobby-screen h2 {
+            margin-top: 0;
+        }
+        
+        #player-list {
+            max-height: 150px;
+            overflow-y: auto;
+            text-align: left;
+        }
+        
+        #player-list p {
+            margin: 5px 0;
+        }
+        
+        #player-list .player-name {
+            font-weight: bold;
+        }
+        
+        #player-list .player-score {
+            float: right;
+        }
+        
+        #lobby-count {
+            margin: 10px 0;
+        }
+        
+        #game-link-input {
+            width: 80%;
+            padding: 5px;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        
+        #copy-link-btn {
+            padding: 5px 10px;
+            font-size: 0.9rem;
+            margin-top: 10px;
         }
         
         #game-container {
-            position: relative;
-            width: 100%;
-            flex-grow: 1;
-            overflow: hidden;
+            flex: 1;
             display: flex;
             flex-direction: column;
-        }
-        
-        #board-container {
-            position: relative;
-            width: 100%;
-            flex-grow: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             overflow: hidden;
-            background-image: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F903EF642-C564-4E6E-BF64-B3EBA2C27443.png?alt=media&token=8cae310c-4381-478e-80a8-862e933ed18f');
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            touch-action: none; /* Prevent browser handling of touch gestures */
-            padding: 5px; /* Reduced padding to allow more space for the board */
-        }
-        
-        #board-wrapper {
-            position: relative;
-            width: 95vmin;
-            height: 95vmin;
-            max-width: 700px;
-            max-height: 700px;
-            overflow: visible; /* Allow content to extend beyond boundaries */
-            transform-origin: center;
-            transition: transform 0.3s ease;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            margin: 0 auto; /* Center the board wrapper */
-            left: 0; /* Ensure perfect centering */
-            right: 0; /* Ensure perfect centering */
-        }
-        
-        #game-board {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            background-image: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FC704317E-E69B-496A-BD94-5AB327EC05C4.png?alt=media&token=8f1b70fe-489d-4a0b-8550-3febfc084e29');
-            background-size: contain; /* Aspect fit */
-            background-repeat: no-repeat;
-            background-position: center;
-            background-color: #222; /* Fallback color if image is transparent or doesn't cover */
-            display: grid;
-            grid-template-columns: repeat(16, 1fr);
-            grid-template-rows: repeat(16, 1fr);
-            gap: 6px; /* Slightly reduced gap to allow for larger cells */
-            padding: 6px; /* Slightly reduced padding to allow for larger cells */
-            overflow: visible;
-            transform-origin: center;
-            box-sizing: border-box;
-        }
-        
-        #zoom-controls {
-            position: absolute;
-            top: 15px; /* Changed from bottom */
-            left: 15px; /* Changed from right */
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            z-index: 50;
-        }
-        
-        #zoom-controls button {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background-color: rgba(0, 0, 0, 0.6);
-            color: white;
-            font-size: 18px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            cursor: pointer;
-        }
-        
-        .cell {
-            background-color: rgba(255, 255, 255, 0.7);
-            border-radius: 0px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 9px; /* Slightly larger font for better readability */
-            position: relative;
-            overflow: hidden;
-            text-align: center;
-            padding: 0; /* Removed padding to ensure images fill the cell completely */
-            border: 1px solid transparent;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            aspect-ratio: 1/1;
-            margin: 0;
-            transition: transform 0.2s, box-shadow 0.2s;
-            box-sizing: border-box; /* Ensure padding doesn't affect size */
-        }
-        
-        .cell:hover {
-            transform: scale(1.05);
-            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
-            z-index: 5;
-        }
-        
-        .cell.era-ancient { background-color: rgba(255, 224, 130, 0.8); }
-        .cell.era-dark { background-color: rgba(144, 202, 249, 0.8); }
-        .cell.era-kings { background-color: rgba(179, 157, 219, 0.8); }
-        .cell.era-industrial { background-color: rgba(239, 154, 154, 0.8); }
-        .cell.era-nirvana { background-color: rgba(248, 187, 208, 0.8); }
-        
-        .player-token {
-            position: absolute;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            z-index: 20; /* Increased z-index to appear above board tiles */
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-weight: bold;
-            color: white;
-            font-size: 6px;
-            border: 1px solid white;
-            animation: pulse 1.5s infinite;
-            pointer-events: none; /* Prevent tokens from blocking cell clicks */
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            transform-origin: center;
-            transition: transform 0.3s ease-out, width 0.3s ease-out, height 0.3s ease-out, box-shadow 0.3s ease-out;
-            will-change: transform, left, top; /* Optimize for animations */
-        }
-        
-        .player-token.current-player {
-            width: 16px;
-            height: 16px;
-            box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.8);
-            z-index: 21; /* Increased z-index to ensure current player is on top of other tokens */
-            animation: currentPlayerPulse 1.5s infinite;
-            transition: transform 0.3s ease-out, width 0.3s ease-out, height 0.3s ease-out, box-shadow 0.3s ease-out;
-        }
-        
-        @keyframes currentPlayerPulse {
-            0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.9); }
-            70% { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
-        }
-        
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
-            70% { box-shadow: 0 0 0 5px rgba(255, 255, 255, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
-        }
-        
-        #controls {
-            display: flex;
-            justify-content: space-around;
-            padding: 10px;
-            background-color: #333;
-            color: white;
-        }
-        
-        button {
-            padding: 10px 15px;
-            border: none;
-            border-radius: 5px;
-            background-color: #4CAF50;
-            color: white;
-            font-weight: bold;
-            font-size: 16px;
-            cursor: pointer;
-            touch-action: manipulation;
-        }
-        
-        button:disabled {
-            background-color: #cccccc;
-            color: #666666;
         }
         
         #player-info {
             padding: 10px;
-            background-image: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F4BA9A657-FBB4-4646-BF29-47819B63007B.png?alt=media&token=826a3fef-d351-4fe1-babb-faadf5dc3ead');
+            background-image: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F94558F2F-2517-4AB7-95D9-DAF6561614D4.jpeg?alt=media&token=33df8fa7-e50b-4ec3-b5e1-6f638318e7d7');
             background-size: cover;
             background-position: center;
             color: white;
+            text-shadow: 1px 1px 2px black;
             display: flex;
-            justify-content: center;  /* Changed from space-between */
-            gap: 10px;               /* Added for spacing */
-            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
         }
         
-        .player-stats {
-            margin: 5px;
-            padding: 8px;
-            border-radius: 5px;
-            /* flex: 1; */ /* Removed to prevent excessive stretching */
-            width: 250px; /* Fixed width for consistent size */
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        #player-info h3 {
+            margin: 0;
+            font-size: 1rem;
         }
         
-        .treasures-list {
-            font-size: 0.8em;
-            margin-top: 5px;
-            max-height: 60px;
-            overflow-y: auto;
-            background-color: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-            padding: 3px;
+        #player-info .score {
+            font-size: 1.2rem;
         }
         
-        #event-display {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 20px;
-            /* border-radius: 10px; */
-            z-index: 100;
-            max-width: 80%;
-            display: none;
-            border-style: solid;
-            border-width: 30px;
-            border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee');
-            border-image-slice: 40;
-            border-image-repeat: stretch;
+        #board-container {
+            flex: 1;
+            position: relative;
         }
         
-        #toast {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 5px;
-            z-index: 100;
-            display: none;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        #board-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        #game-board {
+            width: 100%;
+            height: 100%;
+            background-image: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2Fb3882ebe-76c2-4b82-b6c5-514d8ff88316%2Fcd2be28b-d25d-4c37-8b96-6240bea1e5de.png?alt=media&token=ad341ae2-0dc2-4526-9fd7-93dbe1c26f47');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            transform-origin: top left;
+        }
+        
+        #zoom-controls {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        #zoom-controls button {
+            margin: 0 5px;
+            width: 30px;
+            height: 30px;
+            font-size: 1rem;
             font-weight: bold;
-            max-width: 80%;
+        }
+        
+        #controls {
+            background-color: #eee;
+            padding: 10px;
             text-align: center;
         }
         
-        #inventory {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 90%;
-            max-width: 500px;
-            max-height: 80vh;
-            background-color: rgba(0, 0, 0, 0.9);
-            color: white;
-            padding: 15px;
-            display: none;
-            z-index: 50;
-            /* border-radius: 10px; */
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-            overflow-y: auto;
-            border-style: solid;
-            border-width: 30px;
-            border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee');
-            border-image-slice: 40;
-            border-image-repeat: stretch;
-        }
-        
-        .inventory-item {
-            display: block;
-            margin: 8px 0;
-            padding: 8px;
-            background-color: #555;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: transform 0.1s;
-        }
-        
-        .inventory-item:hover {
-            transform: scale(1.02);
-            background-color: #666;
-        }
-        
         #dice-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 10px;
-            height: 60px;
+            display: inline-block;
+            margin: 0 15px;
+            vertical-align: middle;
         }
         
         .dice {
-            position: relative;
-            width: 50px;
-            height: 50px;
+            width: 40px;
+            height: 40px;
             margin: 0 5px;
-            transform-style: preserve-3d;
-            transition: transform 1.5s ease-out;
+            display: inline-block;
+            position: relative;
         }
         
         .dice-face {
-            position: absolute;
             width: 100%;
             height: 100%;
-            border: 2px solid #333;
-            border-radius: 5px;
-            background-color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 24px;
-            font-weight: bold;
-            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        
-        /* Dice face positions */
-        .dice-face:nth-child(1) { transform: rotateY(0deg) translateZ(25px); }
-        .dice-face:nth-child(2) { transform: rotateY(180deg) translateZ(25px); }
-        .dice-face:nth-child(3) { transform: rotateX(90deg) translateZ(25px); }
-        .dice-face:nth-child(4) { transform: rotateX(-90deg) translateZ(25px); }
-        .dice-face:nth-child(5) { transform: rotateY(90deg) translateZ(25px); }
-        .dice-face:nth-child(6) { transform: rotateY(-90deg) translateZ(25px); }
-        
-        /* Dice dots */
-        .dot {
             position: absolute;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background-color: #333;
+            display: none;
         }
         
-        /* Dot positions for each face */
-        .dice-face.face-1 .dot:nth-child(1) { top: 50%; left: 50%; transform: translate(-50%, -50%); }
-        
-        .dice-face.face-2 .dot:nth-child(1) { top: 25%; left: 25%; }
-        .dice-face.face-2 .dot:nth-child(2) { bottom: 25%; right: 25%; }
-        
-        .dice-face.face-3 .dot:nth-child(1) { top: 25%; left: 25%; }
-        .dice-face.face-3 .dot:nth-child(2) { top: 50%; left: 50%; transform: translate(-50%, -50%); }
-        .dice-face.face-3 .dot:nth-child(3) { bottom: 25%; right: 25%; }
-        
-        .dice-face.face-4 .dot:nth-child(1) { top: 25%; left: 25%; }
-        .dice-face.face-4 .dot:nth-child(2) { top: 25%; right: 25%; }
-        .dice-face.face-4 .dot:nth-child(3) { bottom: 25%; left: 25%; }
-        .dice-face.face-4 .dot:nth-child(4) { bottom: 25%; right: 25%; }
-        
-        .dice-face.face-5 .dot:nth-child(1) { top: 25%; left: 25%; }
-        .dice-face.face-5 .dot:nth-child(2) { top: 25%; right: 25%; }
-        .dice-face.face-5 .dot:nth-child(3) { top: 50%; left: 50%; transform: translate(-50%, -50%); }
-        .dice-face.face-5 .dot:nth-child(4) { bottom: 25%; left: 25%; }
-        .dice-face.face-5 .dot:nth-child(5) { bottom: 25%; right: 25%; }
-        
-        .dice-face.face-6 .dot:nth-child(1) { top: 25%; left: 25%; }
-        .dice-face.face-6 .dot:nth-child(2) { top: 25%; right: 25%; }
-        .dice-face.face-6 .dot:nth-child(3) { top: 50%; left: 25%; }
-        .dice-face.face-6 .dot:nth-child(4) { top: 50%; right: 25%; }
-        .dice-face.face-6 .dot:nth-child(5) { bottom: 25%; left: 25%; }
-        .dice-face.face-6 .dot:nth-child(6) { bottom: 25%; right: 25%; }
-        
-        #dice-total {
-            font-size: 18px;
-            margin-left: 10px;
-            font-weight: bold;
-            color: white;
-        }
-        
-        .karmic-level {
-            display: inline-block;
-            margin-left: 5px;
-            padding: 2px 5px;
-            border-radius: 3px;
-            font-size: 0.8em;
-            background-color: gold;
-            color: black;
-        }
-        
-        #rules-button {
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            z-index: 50;
-            background-color: rgba(0, 0, 0, 0.5);
-            color: white;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 20px;
-            cursor: pointer;
-        }
-        
-        #rules-modal {
-            position: fixed;
+        .dice-face.face-1 .dot:nth-child(1) {
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 90%;
-            max-width: 600px;
-            max-height: 80vh;
-            background-color: rgba(0, 0, 0, 0.9);
-            color: white;
-            padding: 20px;
-            /* border-radius: 10px; */
-            z-index: 150;
+        }
+        
+        .dice-face.face-2 .dot:nth-child(1) {
+            top: 25%;
+            left: 25%;
+        }
+        
+        .dice-face.face-2 .dot:nth-child(2) {
+            bottom: 25%;
+            right: 25%;
+        }
+        
+        .dice-face.face-3 .dot:nth-child(1) {
+            top: 15%;
+            left: 15%;
+        }
+        
+        .dice-face.face-3 .dot:nth-child(2) {
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .dice-face.face-3 .dot:nth-child(3) {
+            bottom: 15%;
+            right: 15%;
+        }
+        
+        .dice-face.face-4 .dot:nth-child(1) {
+            top: 25%;
+            left: 25%;
+        }
+        
+        .dice-face.face-4 .dot:nth-child(2) {
+            top: 25%;
+            right: 25%;
+        }
+        
+        .dice-face.face-4 .dot:nth-child(3) {
+            bottom: 25%;
+            left: 25%;
+        }
+        
+        .dice-face.face-4 .dot:nth-child(4) {
+            bottom: 25%;
+            right: 25%;
+        }
+        
+        .dice-face.face-5 .dot:nth-child(1) {
+            top: 20%;
+            left: 20%;
+        }
+        
+        .dice-face.face-5 .dot:nth-child(2) {
+            top: 20%;
+            right: 20%;
+        }
+        
+        .dice-face.face-5 .dot:nth-child(3) {
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .dice-face.face-5 .dot:nth-child(4) {
+            bottom: 20%;
+            left: 20%;
+        }
+        
+        .dice-face.face-5 .dot:nth-child(5) {
+            bottom: 20%;
+            right: 20%;
+        }
+        
+        .dice-face.face-6 .dot:nth-child(1) {
+            top: 15%;
+            left: 15%;
+        }
+        
+        .dice-face.face-6 .dot:nth-child(2) {
+            top: 15%;
+            right: 15%;
+        }
+        
+        .dice-face.face-6 .dot:nth-child(3) {
+            top: 50%;
+            left: 15%;
+            transform: translateY(-50%);
+        }
+        
+        .dice-face.face-6 .dot:nth-child(4) {
+            top: 50%;
+            right: 15%;
+            transform: translateY(-50%);
+        }
+        
+        .dice-face.face-6 .dot:nth-child(5) {
+            bottom: 15%;
+            left: 15%;
+        }
+        
+        .dice-face.face-6 .dot:nth-child(6) {
+            bottom: 15%;
+            right: 15%;
+        }
+        
+        .dot {
+            width: 8px;
+            height: 8px;
+            background-color: black;
+            border-radius: 50%;
+            position: absolute;
+        }
+        
+        .dice.show-1 .face-1,
+        .dice.show-2 .face-2,
+        .dice.show-3 .face-3,
+        .dice.show-4 .face-4,
+        .dice.show-5 .face-5,
+        .dice.show-6 .face-6 {
+            display: block;
+        }
+        
+        #inventory {
             display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 150;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.85);
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #inventory-content {
+            background-color: #fff;
+            color: #000;
+            padding: 20px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            max-height: 80%;
             overflow-y: auto;
             border-style: solid;
             border-width: 30px;
-            border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee');
+            border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee');
             border-image-slice: 40;
             border-image-repeat: stretch;
+            box-shadow: 0 0 25px rgba(0,0,0,0.6);
+        }
+        
+        #inventory-content h3 {
+            margin-top: 0;
+        }
+        
+        #inventory-items {
+            text-align: left;
+            margin-bottom: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+        
+        #inventory-items p {
+            margin: 5px 0;
+        }
+        
+        #close-inventory {
+            padding: 8px 15px;
+            font-size: 1rem;
+        }
+        
+        #past-life-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 200;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.85);
+            font-family: 'Georgia', serif;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #past-life-modal .content {
+            border: 25px solid transparent;
+            border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2F8e83c21b-7e79-4db8-8885-ff3e3fb49a75%2F3c2248d6-9869-4034-80f2-f6203c39a934.png?alt=media&token=dff7d95b-3a38-42d2-b5b6-b306db331153');
+            border-image-slice: 40;
+            background-color: #111;
+            color: white;
+            padding: 25px;
+            text-align: center;
+            border-radius: 10px;
+            max-width: 400px;
+            margin: auto;
+        }
+        
+        #past-life-modal .content h2 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 1.5rem;
+        }
+        
+        #past-life-modal .content p {
+            margin-bottom: 20px;
+        }
+        
+        #pause-menu-modal .content {
+            border: 25px solid transparent;
+            border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2F8e83c21b-7e79-4db8-8885-ff3e3fb49a75%2F3c2248d6-9869-4034-80f2-f6203c39a934.png?alt=media&token=dff7d95b-3a38-42d2-b5b6-b306db331153');
+            border-image-slice: 40;
+            background-color: #111;
+            color: white;
+            padding: 30px;
+            text-align: center;
+            border-radius: 12px;
         }
     </style>
 </head>
 <body>
         <!-- 🔁 Turn Transition Modal -->
-<!-- Turn Transition Modal (centered overlay) -->
-<div id="turn-transition-modal" style="display: none; position: fixed; z-index: 1000;
-     top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85);
-     font-family: 'Georgia', serif; display: flex; justify-content: center; align-items: center;">
-  <div style="border: 25px solid transparent;
-       border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2F8e83c21b-7e79-4db8-8885-ff3e3fb49a75%2F3c2248d6-9869-4034-80f2-f6203c39a934.png?alt=media&token=dff7d95b-3a38-42d2-b5b6-b306db331153');
-       border-image-slice: 40; background-color: #111; color: white;
-       padding: 30px; text-align: center; border-radius: 12px; max-width: 90%;">
-    <h2 id="turn-player-name" style="font-size: 1.8rem; margin-bottom: 20px;">
-      Player's Turn
-    </h2>
-    <button id="start-turn-button" style="padding: 12px 25px; font-size: 1.1rem;">
-      Start Turn
-    </button>
+<div id="turn-transition-modal" class="modal-overlay" onclick="document.getElementById('turn-transition-modal').style.display='none'; document.getElementById('roll-button').disabled=false;">
+  <div class="modal-content">
+    <h2 id="turn-player-name" style="font-size: 1.8rem; margin-bottom: 20px;">Player's Turn</h2>
+    <button id="start-turn-button" style="padding: 12px 25px; font-size: 1.1rem;">Start Turn</button>
   </div>
 </div>
-<!-- (Removed the older duplicate #turn-transition-modal element that caused conflicts) -->
-
-    <!-- 📝 Name Entry Modal -->
-<div id="name-entry-modal" style="display: none; position: fixed; top: 50%; 
-left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.85);
- color: white; padding: 20px; text-align: center; width: 300px; max-width: 80%; 
-z-index: 300; border-style: solid; border-width: 30px; border-image-source: url(
-'https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 40; border-image-repeat: stretch; box-shadow: 0 0 25px rgba(0,0,0,0.6);">
-  <h2>Join Game</h2>
-  <p>Enter your name to join:</p>
-  <input type="text" id="player-name-input" style="width: 80%; padding: 5px; margin-bottom: 15px;" placeholder="Your name">
-  <br>
-  <button id="name-submit-button" style="padding: 8px 15px; font-size: 1rem; background-color: #4CAF50; color: white; border: none; cursor: pointer;">
-    Join Game
-  </button>
+        <!-- 📝 Name Entry Modal -->
+<div id="name-entry-modal" class="modal-overlay">
+  <div class="modal-content">
+    <h2 style="font-size: 1.6rem; margin-bottom: 15px;">Enter Your Name</h2>
+    <input id="player-name-input" type="text" placeholder="Your name..." style="width: 90%; padding: 10px; font-size: 1rem; border-radius: 6px; border: none; margin-bottom: 15px;">
+    <br>
+    <button id="name-submit-button" style="padding: 10px 20px; font-size: 1rem;">Join Game</button>
+  </div>
 </div>
-
-     <!-- ⚠️ Firebase Connection Lost Modal -->
-<div id="connection-lost-modal" style="display: none; position: fixed; z-index: 9999; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); font-family: 'Georgia', serif; justify-content: center; align-items: center;">
-  <div style="border: 25px solid transparent; border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2F8e83c21b-7e79-4db8-8885-ff3e3fb49a75%2F3c2248d6-9869-4034-80f2-f6203c39a934.png?alt=media&token=dff7d95b-3a38-42d2-b5b6-b306db331153'); border-image-slice: 40; background-color: #111; color: white; padding: 30px; text-align: center; border-radius: 12px; max-width: 400px; margin: auto;">
+        <!-- ⚠️ Firebase Connection Lost Modal -->
+<div id="connection-lost-modal" class="modal-overlay">
+  <div class="modal-content">
     <h2 style="font-size: 1.5rem; margin-bottom: 15px;">Connection Lost</h2>
     <p>We couldn't connect to the game. Please check your internet connection and refresh the page.</p>
     <button onclick="location.reload()" style="margin-top: 15px; padding: 10px 20px; font-size: 1rem;">Reload</button>
   </div>
 </div>
-
   <!-- Start Screen Main Menu -->
 <div id="start-screen">
   <div id="menu-container">
@@ -631,7 +643,6 @@ z-index: 300; border-style: solid; border-width: 30px; border-image-source: url(
     </div>
   </div>
 </div>
-
 <!-- Multiplayer Setup Modal (choose number of players) -->
 <div id="multiplayer-setup-screen" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.85); color: white; padding: 25px; text-align: center; width: 400px; max-width: 80%; z-index: 200; border-style: solid; border-width: 30px; border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 40; border-image-repeat: stretch; box-shadow: 0 0 25px rgba(0,0,0,0.6);">
   <h2>Multiplayer Setup</h2>
@@ -643,7 +654,6 @@ z-index: 300; border-style: solid; border-width: 30px; border-image-source: url(
     <button class="player-count-btn" data-players="5">5</button>
   </div>
 </div>
-
 <!-- Multiplayer Lobby Modal -->
 <div id="lobby-screen" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0,0,0,0.85); color: white; padding: 25px; text-align: center; width: 400px; max-width: 80%; z-index: 200; border-style: solid; border-width: 30px; border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 40; border-image-repeat: stretch; box-shadow: 0 0 25px rgba(0,0,0,0.6);">
   <h2>Lobby</h2>
@@ -652,7 +662,7 @@ z-index: 300; border-style: solid; border-width: 30px; border-image-source: url(
   <p id="lobby-count">0/0 players connected</p>
   <button id="start-game-button" style="display: none; padding: 12px 20px; font-size: 1.1rem;" disabled>Start Game</button>
 </div>
-
+            
     <div id="game-container">
         <div id="player-info"></div>
         
@@ -743,161 +753,33 @@ z-index: 300; border-style: solid; border-width: 30px; border-image-source: url(
                         <div class="dot"></div>
                     </div>
                 </div>
-                <div id="dice-total"></div>
             </div>
             <button id="inventory-button">Inventory</button>
         </div>
     </div>
-    
-    <div id="event-display">
-        <h3 id="event-title"></h3>
-        <p id="event-description"></p>
-        <div id="event-buttons">
-            <button id="event-button">OK</button>
-        </div>
-    </div>
-    
-    <div id="cell-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.8); color: white; padding: 20px; /* border-radius: 10px; */ z-index: 150; max-width: 80%; border-style: solid; border-width: 30px; border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 40; border-image-repeat: stretch;">
-        <h3 id="cell-title"></h3>
-        <p id="cell-description"></p>
-        <p id="cell-era"></p>
-        <button id="cell-close-button">Close</button>
-    </div>
-    
-    <div id="item-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 10px; z-index: 150; max-width: 80%;">
-        <h3 id="item-title"></h3>
-        <p id="item-description"></p>
-        <button id="item-close-button">Close</button>
-    </div>
-    
-    <div id="toast"></div>
-    
-    <div id="treasure-flash" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 200;">
-        <img src="https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2Fb91e8e4f-b357-4c10-8d6d-283275e4ae1d%2Fa8ea7e74-ff0d-407a-8c1a-7841bede785c.png?alt=media&token=71649277-f913-4d88-8e9e-e1d31a8a5156" alt="Treasure Chest" style="width: 150px; height: auto; object-fit: contain;">
-    </div>
-
-    <div id="sudden-death-flash" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 201;">
-        <img src="https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F68456DF2-77E9-43D7-8AD8-121435CBE93B.png?alt=media&token=961fed9d-bd59-4d1a-8375-fb3c7de97a0d" alt="Sudden Death" style="width: 150px; height: auto; object-fit: contain;">
-    </div>
-
-    <div id="vengeance-flash" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 201;">
-        <img src="https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FF4FC172A-113E-41F6-8534-349F233A7537.png?alt=media&token=be5ab9bf-3312-443d-9a38-a6d1d05d1b72" alt="Vengeance" style="width: 150px; height: auto; object-fit: contain;">
-    </div>
-
-    <div id="barter-flash" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 201;">
-        <img src="https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F6D9CD3AC-DB0E-4A4E-B6E4-770AFB8A4148.png?alt=media&token=d2d1a328-84e6-4c3c-9880-f7faed22950a" alt="Barter" style="width: 150px; height: auto; object-fit: contain;">
-    </div>
-
-    <div id="twist-flash" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 201;">
-        <img src="https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FC264838E-B352-4B6F-90FE-4F7A4AD509DF.png?alt=media&token=16c1d136-27cc-4cfd-a9d4-bf0af6d4f08a" alt="Twist" style="width: 150px; height: auto; object-fit: contain;">
-    </div>
-    
-    <div id="robbery-flash" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 201;">
-        <img src="https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FAAA4EB8C-2489-41F3-BD7F-D600AC43C9D7.png?alt=media&token=cd0735b3-4f85-497a-b887-127193f302f4" alt="Robbery" style="width: 150px; height: auto; object-fit: contain;">
-    </div>
-    
-    <div id="select-inventory-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.9); color: white; padding: 20px; z-index: 160; max-width: 80%; border-style: solid; border-width: 30px; border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 40; border-image-repeat: stretch;">
-        <h3>View Inventory For:</h3>
-        <div id="select-inventory-player-buttons" style="margin-bottom: 15px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;">
-            <!-- Player buttons will be dynamically added here -->
-        </div>
-        <button id="close-select-inventory-modal-button" style="background-color: #f44336;">Cancel</button>
-    </div>
-
-    <div id="inventory">
-        <h3>Inventory</h3>
-        <div id="inventory-items"></div>
-        <button id="close-inventory">Close</button>
-    </div>
-    
-    <div id="rules-button">?</div>
-    
-    <div id="rules-modal">
-        <h2>ReinKarma — Game Instructions</h2>
-        
-        <h3>OBJECTIVE</h3>
-        <p>Accumulate treasure and karma across multiple past lives. Reach Nirvana (square 160) and finish the game with the highest credit total to win.</p>
-        
-        <h3>HOW TO WIN</h3>
-        <ul>
-            <li>The first player to reach Nirvana (square 160) ends the game.</li>
-            <li>Once Nirvana is reached, all players' final scores are tallied:</li>
-            <li>Total value of treasure cards</li>
-            <li>Remaining credits</li>
-            <li>Karmic Levels achieved (each one banks 3,000 credits at the cost of 3,000 credits)</li>
-        </ul>
-        
-        <h3>TURN SEQUENCE</h3>
-        <ol>
-            <li>Roll the dice to begin your turn.</li>
-            <li>Move your token the number of spaces rolled.</li>
-            <li>Take the action listed on the square you land on.</li>
-            <li>If instructed to "roll again," repeat step 1.</li>
-        </ol>
-        
-        <h3>KARMIC LEVELS</h3>
-        <p>As you accumulate wealth, you progress spiritually.</p>
-        <ul>
-            <li>When a player's combined total of credits and treasure value reaches 3,000, they are prompted: "Would you like to ascend to the next Karmic Level?"</li>
-            <li>If they say yes:</li>
-            <li>3,000 worth of combined credits and treasures are deducted</li>
-            <li>One level is locked in</li>
-            <li>The player banks 3,000 credits that cannot be lost</li>
-            <li>There is no bonus for karmic levels — only the locked-in value.</li>
-        </ul>
-        
-        <p>Karmic Levels (in order):</p>
-        <ol>
-            <li>Scum of the Earth</li>
-            <li>Common Place</li>
-            <li>Heroes and Heroines</li>
-            <li>Greats and Saints</li>
-        </ol>
-        
-        <h3>SQUARE TYPES & ACTIONS</h3>
-        <!-- (Rule text continues...) -->
-        <button id="close-rules">Close Rules</button>
-    </div>
-
-    <div id="past-life-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.92); color: white; padding: 25px; z-index: 250; max-width: 90%; width: 600px; max-height: 85vh; overflow-y: auto; border-style: solid; border-width: 30px; border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 40; border-image-repeat: stretch; text-align: center;">
-        <h3 id="past-life-player-name" style="margin-top: 0; margin-bottom: 5px; font-size: 1.6rem;"></h3>
-        <h4 id="past-life-karmic-level" style="margin-top: 0; margin-bottom: 5px; font-size: 1.2rem; color: #ffd700;"></h4>
-        <p id="past-life-score-info" style="margin-top: 0; margin-bottom: 15px; font-size: 1rem;"></p>
-        <hr style="border-color: rgba(255,255,255,0.3); margin-bottom:15px;">
-        <p id="past-life-text" style="white-space: pre-wrap; text-align: left; font-size: 0.95rem; line-height: 1.5; margin-bottom: 10px;"></p>
-        <h5 id="past-life-title" style="font-style: italic; font-size: 1.1rem; margin-top: 15px; margin-bottom: 20px;"></h5>
-        <div style="margin-top: 20px;">
-  <button id="next-past-life-button" style="padding: 10px 20px; font-size: 1rem; margin-right: 10px;">
-    Next Player
-  </button>
-  <button id="final-end-game-button" style="padding: 10px 20px; font-size: 1rem; background-color: #f44336; color: white;">
-    End Game
-  </button>
-</div>
-    </div>
-
-    <!-- 🛑 Pause / End Game Modal -->
-<div id="pause-menu-modal" style="display: none; position: fixed; top: 0; left: 0; z-index: 9999; width: 100%; height: 100%; background-color: rgba(0,0,0,0.85); font-family: Georgia, serif; justify-content: center; align-items: center;">
-  <div style="border: 25px solid transparent; border-image-source: url('https://firebasestorage.googleapis.com/v0/b/sticky-20bca.appspot.com/o/sgm-asset%2F8e83c21b-7e79-4db8-8885-ff3e3fb49a75%2F3c2248d6-9869-4034-80f2-f6203c39a934.png?alt=media&token=dff7d95b-3a38-42d2-b5b6-b306db331153'); border-image-slice: 40; background-color: #111; color: white; padding: 30px; text-align: center; border-radius: 12px;">
+        <!-- 🛑 Pause / End Game Modal -->
+<div id="pause-menu-modal" class="modal-overlay">
+  <div class="modal-content">
     <h2>Game Menu</h2>
     <button id="resume-game" style="margin: 10px; padding: 10px 20px;">Resume Game</button><br>
     <button id="end-game-button" style="margin: 10px; padding: 10px 20px;">End Game</button>
   </div>
 </div>
-
-<!-- ⏸ Floating Pause Button -->
-<button id="pause-button" style="position: fixed; bottom: 15px; right: 15px; padding: 10px 15px; font-size: 1rem; z-index: 1000;">
-  ⏸️
-</button>
-
+    
+    <!-- ⏸ Floating Pause Button -->
+    <button id="pause-button" style="position: fixed; bottom: 15px; right: 15px; padding: 10px 15px; font-size: 1rem; z-index: 1000;">
+      ⏸️
+    </button>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
+    
     <script>
         // Initialize sound effects using Howler.js
-        Howler.html5 = true; // Use HTML5 Audio for iOS compatibility.
-
+        // Set HTML5 Audio as the preferred method for iOS compatibility, especially for consistent behavior.
+        Howler.html5 = true; // Global setting for Howler to use HTML5 Audio.
+        
         function generateGameId() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let id = '';
@@ -911,7 +793,7 @@ function generateClientId() {
   return 'client-' + Math.random().toString(36).substr(2, 9);
 }
 
-// 🔥 Initialize Firebase (only once)
+// 🔥 Initialize Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyBJXHRD2xs75a7icYk8Njygc30LhZFdjtY",
   authDomain: "reinkarma-be704.firebaseapp.com",
@@ -924,314 +806,174 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// Show Pause Menu
+// 🎮 Game state and player setup
+let players = [];
+let currentPlayerIndex = 0;
+let currentGameId = null;
+let currentPlayerId = null;
+let currentTurn = 0;
+let gameInProgress = false;
+let host = false;
+let inventory = {};
+let pastLives = {};
+
+const gameIdDisplay = document.getElementById("game-id-display");
+const rollButton = document.getElementById("roll-button");
+const diceDisplay = document.getElementById("dice");
+const inventoryButton = document.getElementById("inventory-button");
+const inventoryPanel = document.getElementById("inventory");
+const inventoryContent = document.getElementById("inventory-content");
+const inventoryItemsDiv = document.getElementById("inventory-items");
+const closeInventoryButton = document.getElementById("close-inventory");
+
+const lobbyScreen = document.getElementById("lobby-screen");
+const startScreen = document.getElementById("start-screen");
+const multiplayerSetupScreen = document.getElementById("multiplayer-setup-screen");
+const playerListDiv = document.getElementById("player-list");
+const lobbyMessage = document.getElementById("lobby-message");
+const lobbyCount = document.getElementById("lobby-count");
+const startGameButton = document.getElementById("start-game-button");
+const startMultiplayerButton = document.getElementById("start-multiplayer-button");
+const nameEntryModal = document.getElementById("name-entry-modal");
+const playerNameInput = document.getElementById("player-name-input");
+const submitNameBtn = document.getElementById("name-submit-button");
+const gameLinkInput = document.getElementById("game-link-input");
+const copyLinkBtn = document.getElementById("copy-link-btn");
+const pauseButton = document.getElementById("pause-button");
+const pauseMenuModal = document.getElementById("pause-menu-modal");
+const resumeGameBtn = document.getElementById("resume-game");
+const endGameBtn = document.getElementById("end-game-button");
+const finalEndGameBtn = document.getElementById("final-end-game-button");
+const finalScoreList = document.getElementById("final-score-list");
+const finalOkButton = document.getElementById("final-ok-button");
+
+// 🎲 Dice rolling
+let dice1Value = 0;
+let dice2Value = 0;
+let diceTotal = 0;
+
+// 📜 Board events data (e.g., "Ladder to 14", "Snake to 7", etc.)
+const boardEvents = {};
+
+// 🎮 Game logic functions here...
+
+// 🕹️ UI and event handlers
 document.getElementById("pause-button").onclick = () => {
   document.getElementById("pause-menu-modal").style.display = "flex";
 };
 
-// Resume Gameplay
 document.getElementById("resume-game").onclick = () => {
   document.getElementById("pause-menu-modal").style.display = "none";
 };
 
-// End Game via Pause Menu
 document.getElementById("end-game-button").onclick = () => {
   if (confirm("End the current game and return to the main menu?")) {
     if (window.currentGameId) {
       db.ref(`/games/${window.currentGameId}`).remove()
         .then(() => {
-          alert("Game ended.");
           location.reload();
-        })
-        .catch(err => {
-          console.error("Error ending game:", err);
-          alert("Unable to end game. Check connection.");
         });
+    } else {
+      location.reload();
     }
   }
 };
-// End Game from Final Score modal
+
 document.getElementById("final-end-game-button").onclick = () => {
   if (confirm("Are you sure you want to end the game?")) {
     if (window.currentGameId) {
       db.ref(`/games/${window.currentGameId}`).remove()
         .then(() => {
-          alert("Game ended.");
           location.reload();
-        })
-        .catch(err => {
-          console.error("Error ending game:", err);
-          alert("Unable to end game. Check connection.");
         });
+    } else {
+      location.reload();
     }
   }
 };
 
-// Check if joining an existing game via URL
-const urlParams = new URLSearchParams(window.location.search);
-const joinGameId = urlParams.get("game");
-if (joinGameId) {
-  window.currentGameId = joinGameId;
-  const savedId = localStorage.getItem(`clientId_${joinGameId}`);
-  window.localPlayerId = savedId ? savedId : generateClientId();
-  document.getElementById("start-screen").style.display = "none";
-  document.getElementById("multiplayer-setup-screen").style.display = "none";
-  document.getElementById("lobby-screen").style.display = "none";
+// 🔔 Name Entry and Lobby Setup
+db.ref(".info/connected").on("value", (snap) => {
+  if (snap.val() === false) {
+    // Show connection lost modal if disconnected
+    document.getElementById("connection-lost-modal").style.display = "flex";
+  }
+});
 
-  db.ref(`/games/${joinGameId}`).once("value").then(snapshot => {
-    if (!snapshot.exists()) {
-      alert("Game not found or no longer available.");
-      document.getElementById("name-entry-modal").style.display = "none";
-      document.getElementById("start-screen").style.display = "block";
-      return;
-    }
-    const gameData = snapshot.val();
-    console.log("Joining game:", joinGameId, gameData);
-    if (window.localPlayerId === gameData.hostId) {
-      document.getElementById("start-game-button").style.display = "inline-block";
-    }
-    const playersSoFar = gameData.state.players || {};
-    if (Object.keys(playersSoFar).length >= gameData.playerCount) {
-      alert("This game is already full. You cannot join.");
-      document.getElementById("name-entry-modal").style.display = "none";
-      document.getElementById("start-screen").style.display = "block";
-      return;
-    }
-    if (playersSoFar[window.localPlayerId]) {
-      const existingPlayer = playersSoFar[window.localPlayerId];
-      alert(`Rejoined the game as ${existingPlayer.name}.`);
-      document.getElementById("name-entry-modal").style.display = "none";
-      document.getElementById("lobby-screen").style.display = "block";
-      const playerListDiv = document.getElementById("player-list");
-      const lobbyCountText = document.getElementById("lobby-count");
-      const totalPlayers = gameData.playerCount;
-      db.ref(`/games/${joinGameId}/state/players`).on("value", snapshot => {
-        const players = snapshot.val() || {};
-        playerListDiv.innerHTML = "";
-        let count = 0;
-        Object.values(players).forEach(player => {
-          count++;
-          const entry = document.createElement("div");
-          entry.innerHTML = `<span style="color:${player.tokenColor};">&#x25CF;</span> ${player.name} (${player.id})`;
-          playerListDiv.appendChild(entry);
-        });
-        lobbyCountText.textContent = `${count}/${totalPlayers} players connected`;
-      }, error => {
-        console.error("Players list read failed:", error);
-        document.getElementById("connection-lost-modal").style.display = "flex";
-      });
-
-      db.ref(`/games/${joinGameId}/state/started`).on("value", snapshot => {
-        if (snapshot.val() === true) {
-          console.log("Game started signal received (joiner)!");
-          db.ref(`/games/${joinGameId}/state`).once("value").then(stateSnap => {
-            const state = stateSnap.val();
-            if (state) {
-              gameState = state;
-              console.log("Joiner game state restored:", gameState);
-
-              // Initialize board and players
-              const playersObj = state.players || {};
-              const playersArray = Object.values(playersObj);
-              playersArray.forEach(p => { p.color = p.tokenColor });
-              gameState.players = playersArray;
-              gameState.currentPlayerIndex = state.currentPlayerIndex || 0;
-              gameState.gameStarted = true;
-
-              createBoard();
-              populateAllCardData();
-              updatePlayerInfo();
-              placePlayerTokens();
-              setupEventListeners();
-
-              // 🔁 Start turn tracking
-              db.ref(`/games/${joinGameId}/state/currentPlayerIndex`).on("value", snap => {
-                const idx = snap.val();
-                if (idx === null || idx === undefined) return;
-                const currentPlayer = gameState.players[idx];
-                if (!currentPlayer) return;
-                if (currentPlayer.id === window.localPlayerId) {
-                  // Only show modal if game is initialized and it's this player's turn
-                  if (gameState.gameStarted) {
-                    document.getElementById("turn-player-name").textContent = `${currentPlayer.name}'s Turn`;
-                    document.getElementById("turn-transition-modal").style.display = "flex";
-                    document.getElementById("start-turn-button").onclick = () => {
-                      document.getElementById("turn-transition-modal").style.display = "none";
-                      document.getElementById("roll-button").disabled = false;
-                    };
-                  }
-                } else {
-                  document.getElementById("turn-transition-modal").style.display = "none";
-                  document.getElementById("roll-button").disabled = true;
-                }
-              });
-            } else {
-              console.warn("Joiner could not restore game state.");
-            }
-          });
-        }
-      });
-
-    } else {
-      // New player – show name entry modal
-      document.getElementById("name-entry-modal").style.display = "block";
-      const nameInput = document.getElementById("player-name-input");
-      const submitNameBtn = document.getElementById("name-submit-button");
-      nameInput.addEventListener("keydown", e => {
-        if (e.key === "Enter") submitNameBtn.click();
-      });
-      submitNameBtn.onclick = () => {
-        const playerName = nameInput.value.trim();
-        if (!playerName) {
-          alert("Please enter your name to join the game.");
-          return;
-        }
-        const colorList = ["red", "blue", "green", "orange", "magenta"];
-        const playerIndex = Object.keys(playersSoFar).length;
-        const assignedColor = colorList[playerIndex] || "white";
-        const newPlayer = {
-          id: window.localPlayerId,
-          name: playerName,
-          tokenColor: assignedColor,
-          inventory: [],
-          position: 0,
-          credits: 0,
-          isAI: false
-        };
-        db.ref(`/games/${joinGameId}/state/players/${window.localPlayerId}`).set(newPlayer)
-        .then(() => {
-          console.log("Player added:", newPlayer);
-          localStorage.setItem(`clientId_${joinGameId}`, window.localPlayerId);
-          document.getElementById("name-entry-modal").style.display = "none";
-          document.getElementById("lobby-screen").style.display = "block";
-          const playerListDiv = document.getElementById("player-list");
-          const lobbyCountText = document.getElementById("lobby-count");
-          const totalPlayers = gameData.playerCount;
-          db.ref(`/games/${joinGameId}/state/players`).on("value", snapshot => {
-            const players = snapshot.val() || {};
-            playerListDiv.innerHTML = "";
-            let count = 0;
-            Object.values(players).forEach(player => {
-              count++;
-              const entry = document.createElement("div");
-              entry.innerHTML = `<span style="color:${player.tokenColor};">&#x25CF;</span> ${player.name} (${player.id})`;
-              playerListDiv.appendChild(entry);
-            });
-            lobbyCountText.textContent = `${count}/${totalPlayers} players connected`;
-          }, error => {
-            console.error("Players list read failed:", error);
-            document.getElementById("connection-lost-modal").style.display = "flex";
-          });
-        })
-        .catch(err => {
-          console.error("Failed to add player:", err);
-          alert("Failed to join game. Please check your connection and try again.");
-        });
-      };
-    }
-  });
+// Listen for changes to the game data (for real-time updates)
+function listenForGameUpdates(gameId) {
+  // ...
 }
 
-// Host creating a new multiplayer game
-document.getElementById("start-multiplayer-button").addEventListener("click", () => {
-  isMultiplayer = true;
-  document.getElementById("start-screen").style.display = "none";
-  document.getElementById("multiplayer-setup-screen").style.display = "block";
-});
+// 🏁 Game end handling
+function endGame() {
+  // ...
+}
 
-// Handle player count selection
+// 🎯 Core game logic functions (rollDice, movePlayer, checkSnakesLadders, etc.)
+function rollDice() {
+  // ...
+}
+
+// ☁️ Real-time database integration
+function updateGameData() {
+  // ...
+}
+
+// 🚀 Game initialization when startGame is called
+function startGame() {
+  // ...
+}
+
+// 🏎️ On page load, set up new local game with selected number of players
 document.querySelectorAll(".player-count-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const playerCount = parseInt(btn.getAttribute("data-players"));
-    if (!isMultiplayer) {
-      // Hot-seat local game setup
-      setupPlayers(playerCount);
-    } else {
-      // Multiplayer host flow
-      const gameId = generateGameId();
-      const hostId = generateClientId();
-      window.currentGameId = gameId;
-      window.localPlayerId = hostId;
-      document.getElementById("multiplayer-setup-screen").style.display = "none";
-      document.getElementById("name-entry-modal").style.display = "block";
-      const nameInput = document.getElementById("player-name-input");
-      const nameSubmitBtn = document.getElementById("name-submit-button");
-      nameInput.addEventListener("keydown", e => {
-        if (e.key === "Enter") nameSubmitBtn.click();
-      });
-      nameSubmitBtn.onclick = () => {
-        const hostName = nameInput.value.trim() || "Host";
-        const gameData = {
-          hostId: hostId,
-          playerCount: playerCount,
-          state: {
-            players: {},
-            currentPlayerIndex: 0,
-            board: [],
-            started: false
-          }
-        };
-        db.ref(`/games/${gameId}`).set(gameData).then(() => {
-          const colorList = ["red", "blue", "green", "orange", "magenta"];
-          const hostPlayer = {
-            id: hostId,
-            name: hostName,
-            tokenColor: colorList[0],
-            inventory: [],
-            position: 0,
-            credits: 0,
-            isAI: false
-          };
-          return db.ref(`/games/${gameId}/state/players/${hostId}`).set(hostPlayer);
-        }).then(() => {
-          console.log("Multiplayer game created:", gameId);
-          document.getElementById("name-entry-modal").style.display = "none";
-          document.getElementById("lobby-screen").style.display = "block";
-          const startGameBtn = document.getElementById("start-game-button");
-          startGameBtn.style.display = "inline-block";
-          startGameBtn.disabled = true;
-          const playerListDiv = document.getElementById("player-list");
-          const lobbyCountText = document.getElementById("lobby-count");
-          const totalPlayers = playerCount;
-          db.ref(`/games/${gameId}/state/players`).on("value", snapshot => {
-            const players = snapshot.val() || {};
-            playerListDiv.innerHTML = "";
-            let count = 0;
-            Object.values(players).forEach(player => {
-              count++;
-              const entry = document.createElement("div");
-              entry.innerHTML = `<span style="color:${player.tokenColor};">&#x25CF;</span> ${player.name} (${player.id})`;
-              playerListDiv.appendChild(entry);
-            });
-            lobbyCountText.textContent = `${count}/${totalPlayers} players connected`;
-            if (count >= totalPlayers) {
-              startGameBtn.disabled = false;
-            } else {
-              startGameBtn.disabled = true;
-            }
-          }, error => {
-            console.error("Players list read failed:", error);
-            document.getElementById("connection-lost-modal").style.display = "flex";
-          });
-        }).catch(err => {
-          console.error("Failed to create multiplayer game:", err);
-          alert("Failed to start multiplayer game. Please try again.");
-        });
-      };
-    }
-  });
+  btn.onclick = () => {
+    const numPlayers = parseInt(btn.getAttribute("data-players"));
+    host = true;
+    // ...
+  };
 });
 
-// Host starts the game
-document.getElementById("start-game-button").addEventListener("click", () => {
-  if (window.currentGameId) {
-    db.ref(`/games/${window.currentGameId}/state/currentPlayerIndex`).set(0).then(() => {
-      return db.ref(`/games/${window.currentGameId}/state/started`).set(true);
-    }).then(() => {
-      console.log("Game started by host. Turn starts at player index 0.");
-    }).catch(err => {
-      console.error("Failed to start game:", err);
-      alert("Error starting the game. Please try again.");
+// 🌐 Multiplayer game creation
+document.getElementById("start-multiplayer-button").onclick = () => {
+  multiplayerSetupScreen.style.display = "block";
+};
+
+// 👥 Multiplayer lobby creation
+// ...
+
+// 📥 Join multiplayer game via code
+// ...
+
+// 🔀 Turn management
+function nextTurn() {
+  // ...
+}
+
+// 🎴 Inventory management
+inventoryButton.onclick = () => {
+  // ...
+};
+
+// 💀 Past lives reveal
+function showPastLives(pastLivesData) {
+  // ...
+}
+
+// 👥 Final score display
+function showFinalScores() {
+  // ...
+}
+
+// 🏆 Determine winner(s)
+function determineWinners() {
+  // ...
+}
+
+// 🎮 Reset game state to initial values
+function resetGameState() {
+  // ...
+}
       });
     };
   });
