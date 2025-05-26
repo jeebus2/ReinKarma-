@@ -4,7 +4,41 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ReinKarma</title>
+    <!-- Firebase SDK and Initialization -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBJXHRD2xs75a7icYk8Njygc30LhZFdjtY",
+      authDomain: "reinkarma-be704.firebaseapp.com",
+      databaseURL: "https://reinkarma-be704-default-rtdb.firebaseio.com",
+      projectId: "reinkarma-be704",
+      storageBucket: "reinkarma-be704.appspot.com",
+      messagingSenderId: "622953179983",
+      appId: "1:622953179983:web:61fe806b729e82ef29733a"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    </script>
     <style>
+        #play-multiplayer-btn {
+            background-color: #553285; /* A distinct color, purple-ish */
+            color: white;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            margin-top: 25px; /* Space from player count buttons */
+            display: block; /* Make it full width or center it */
+            width: 100%; /* Full width of container */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        #play-multiplayer-btn:hover {
+            background-color: #6a4a9a;
+            transform: translateY(-2px);
+        }
         #turn-transition-modal {
             position: fixed;
             top: 50%;
@@ -567,16 +601,61 @@
     </style>
 </head>
 <body>
-    <div id="start-screen">
+    <!-- Multiplayer Lobby UI -->
+<div id="multiplayer-setup-screen" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); color:white; z-index:250; justify-content:center; align-items:center; flex-direction:column;">
+  <h2 id="multiplayer-setup-title">Enter Your Name</h2>
+  <div style="margin-bottom: 20px; width: 80%; max-width: 400px;">
+    <input id="player-name-input" type="text" placeholder="Your Name" style="padding:10px; font-size:16px; width: 100%; margin-bottom: 15px;">
+    <input id="game-id-input" type="text" placeholder="Game ID (for joining)" style="padding:10px; font-size:16px; width: 100%; display: none;">
+  </div>
+  <div style="display: flex; gap: 10px;">
+    <button id="create-game-button" style="background-color: #4CAF50;">Create Game</button>
+    <button id="join-game-button" style="background-color: #3498db;">Join Game</button>
+    <button id="back-to-menu-button" style="background-color: #95a5a6;">Back</button>
+  </div>
+</div>
+
+<div id="lobby-screen" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); color:white; z-index:250; flex-direction:column; padding: 20px;">
+  <h2>Game Lobby</h2>
+  <div style="margin: 10px 0 20px 0; padding: 10px; background-color: rgba(255,255,255,0.1); border-radius: 5px;">
+    <p>Game ID: <span id="lobby-game-id" style="font-weight: bold; color: #4CAF50;"></span></p>
+    <p style="font-size: 0.9em; margin-top: 5px;">Share this ID with friends so they can join your game</p>
+    <div style="margin-top: 10px; background-color: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; display: flex; align-items: center;">
+      <input id="share-url" type="text" readonly style="flex: 1; background: transparent; border: none; color: white; font-size: 0.9em; padding: 5px;">
+      <button id="copy-url-btn" style="margin-left: 5px; background: #4CAF50; border: none; color: white; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Copy</button>
+    </div>
+  </div>
+  <div style="flex: 1; overflow-y: auto; margin-bottom: 20px;">
+    <h3>Players</h3>
+    <div id="player-list" style="margin-top: 10px;"></div>
+  </div>
+  <div style="display: flex; gap: 10px;">
+    <button id="start-game-button" style="flex: 1; background-color: #4CAF50;">Start Game</button>
+    <button id="leave-lobby-button" style="flex: 1; background-color: #e74c3c;">Leave Lobby</button>
+  </div>
+</div>
+
+<div id="start-screen">
         <div id="menu-container">
             <h1>ReinKarma</h1>
-            <p>A journey through past lives to reach Nirvana. How many players?</p>
-            <div>
-                <button class="player-count-btn" data-players="1">1</button>
-                <button class="player-count-btn" data-players="2">2</button>
-                <button class="player-count-btn" data-players="3">3</button>
-                <button class="player-count-btn" data-players="4">4</button>
-                <button class="player-count-btn" data-players="5">5</button>
+            <p>A journey through past lives to reach Nirvana.</p>
+            <div id="single-player-options">
+                <h3>Single Player Game</h3>
+                <p>How many players?</p>
+                <div>
+                    <button class="player-count-btn" data-players="1">1</button>
+                    <button class="player-count-btn" data-players="2">2</button>
+                    <button class="player-count-btn" data-players="3">3</button>
+                    <button class="player-count-btn" data-players="4">4</button>
+                    <button class="player-count-btn" data-players="5">5</button>
+                </div>
+            </div>
+            <div id="multiplayer-options" style="margin-top: 25px; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 20px;">
+                <h3>Online Multiplayer</h3>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button id="host-game-btn" style="flex: 1; background-color: #4CAF50;">Host New Game</button>
+                    <button id="join-game-btn" style="flex: 1; background-color: #3498db;">Join Game</button>
+                </div>
             </div>
         </div>
     </div>
@@ -877,7 +956,20 @@
         <button id="close-rules">Close Rules</button>
     </div>
 
-    <div id="past-life-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.92); color: white; padding: 25px; z-index: 250; max-width: 90%; width: 600px; max-height: 85vh; overflow-y: auto; border-style: solid; border-width: 30px; border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 40; border-image-repeat: stretch; text-align: center;">
+    <!-- Pause Menu Modal -->
+<div id="pause-menu-modal" style="display: none; position: fixed; top: 0; left: 0; z-index: 9999; width: 100%; height: 100%; background-color: rgba(0,0,0,0.85); font-family: Arial, sans-serif; justify-content: center; align-items: center;">
+  <div style="border-style: solid; border-width: 30px; border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 40; border-image-repeat: stretch; background-color: rgba(0, 0, 0, 0.9); color: white; padding: 30px; text-align: center; max-width: 80%; width: 400px;">
+    <h2 style="margin-top: 0; color: #ffd700;">Game Menu</h2>
+    <button id="resume-game" style="margin: 10px; padding: 12px 25px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; font-size: 1rem; cursor: pointer; width: 80%;">Resume Game</button><br>
+    <button id="restart-game" style="margin: 10px; padding: 12px 25px; background-color: #3498db; color: white; border: none; border-radius: 5px; font-size: 1rem; cursor: pointer; width: 80%;">Restart Game</button><br>
+    <button id="end-game-button" style="margin: 10px; padding: 12px 25px; background-color: #e74c3c; color: white; border: none; border-radius: 5px; font-size: 1rem; cursor: pointer; width: 80%;">End Game</button>
+  </div>
+</div>
+
+<!-- Floating Pause Button -->
+<button id="pause-button" style="position: fixed; bottom: 65px; right: 15px; width: 50px; height: 50px; border-radius: 50%; background-color: rgba(0, 0, 0, 0.6); color: white; font-size: 1.5rem; border: 2px solid rgba(255, 255, 255, 0.3); cursor: pointer; z-index: 1000; display: flex; justify-content: center; align-items: center;">⏸️</button>
+
+<div id="past-life-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.92); color: white; padding: 25px; z-index: 250; max-width: 90%; width: 600px; max-height: 85vh; overflow-y: auto; border-style: solid; border-width: 30px; border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 40; border-image-repeat: stretch; text-align: center;">
         <h3 id="past-life-player-name" style="margin-top: 0; margin-bottom: 5px; font-size: 1.6rem;"></h3>
         <h4 id="past-life-karmic-level" style="margin-top: 0; margin-bottom: 5px; font-size: 1.2rem; color: #ffd700;"></h4>
         <p id="past-life-score-info" style="margin-top: 0; margin-bottom: 15px; font-size: 1rem;"></p>
@@ -1298,6 +1390,18 @@ const darkAgesSquareImageUrls = [
             pastLifeTextsData = parsePastLifeRawData(pastLifeRawDataString);
             initGame();
             // Start screen music will now attempt to play when the menu loads.
+
+            const playMultiplayerBtn = document.getElementById('play-multiplayer-btn');
+            if (playMultiplayerBtn) {
+                playMultiplayerBtn.addEventListener('click', () => {
+                    if (sounds.startScreen && sounds.startScreen.playing()) {
+                        sounds.startScreen.stop();
+                    }
+                    localStorage.removeItem("reinkarma_game_id");
+                    localStorage.removeItem("reinkarma_client_id");
+                    window.location.reload();
+                });
+            }
         };
         
         // Generate board path to end at (15,0) (top-right) for Nirvana
@@ -4872,29 +4976,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             }
         }
     </script>
-
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-
 <script>
-const firebaseConfig = {
-  apiKey: "AIzaSyBJXHRD2xs75a7icYk8Njygc30LhZFdjtY",
-  authDomain: "reinkarma-be704.firebaseapp.com",
-  databaseURL: "https://reinkarma-be704-default-rtdb.firebaseio.com",
-  projectId: "reinkarma-be704",
-  storageBucket: "reinkarma-be704.appspot.com",
-  messagingSenderId: "622953179983",
-  appId: "1:622953179983:web:61fe806b729e82ef29733a"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-</script>
-
-
-<!-- Multiplayer Logic -->
-<script>
-
-// Assign clientId and gameId
 let gameId = localStorage.getItem("reinkarma_game_id");
 let clientId = localStorage.getItem("reinkarma_client_id");
 if (!clientId) {
@@ -4902,90 +4984,631 @@ if (!clientId) {
   localStorage.setItem("reinkarma_client_id", clientId);
 }
 
-// Join game
-function joinGame(playerName) {
-  gameId = gameId || 'game-' + Math.random().toString(36).substr(2, 9);
-  localStorage.setItem("reinkarma_game_id", gameId);
-  const playerRef = db.ref(`/games/${gameId}/state/players/${clientId}`);
-  return playerRef.set({
-    id: clientId,
-    name: playerName,
-    credits: 1500,
-    inventory: [],
-    position: 0
-  });
-}
-
-// Render lobby
-function renderLobby() {
-  const list = document.getElementById("player-list");
-  db.ref(`/games/${gameId}/state/players`).on("value", snapshot => {
-    list.innerHTML = "";
+function joinGame(playerName, isHost = false) {
+  return db.ref(`/games/${gameId}/state/players`).once("value").then(snapshot => {
     const players = snapshot.val() || {};
-    for (let id in players) {
-      const item = document.createElement("div");
-      item.textContent = players[id].name;
-      list.appendChild(item);
+    if (Object.keys(players).length >= 5) {
+      alert("This game already has 5 players.");
+      return Promise.reject("Max players reached");
+    }
+    
+    if (!gameId) {
+      gameId = 'game-' + Math.random().toString(36).substr(2, 6);
+      localStorage.setItem("reinkarma_game_id", gameId);
+    }
+    
+    // Store gameId in window for pause menu access
+    window.currentGameId = gameId;
+    
+    const playerRef = db.ref(`/games/${gameId}/state/players/${clientId}`);
+    const playerData = { 
+      id: clientId, 
+      name: playerName, 
+      credits: 1500, 
+      inventory: [], 
+      position: 0,
+      isHost: isHost
+    };
+    
+    // If this is the host, also initialize game state
+    if (isHost) {
+      return db.ref(`/games/${gameId}/state`).update({
+        started: false,
+        hostId: clientId,
+        players: { [clientId]: playerData }
+      });
+    } else {
+      return playerRef.set(playerData);
     }
   });
 }
 
-// Start game
-document.getElementById("join-game-button").onclick = () => {
+function renderLobby() {
+  const list = document.getElementById("player-list");
+  const startButton = document.getElementById("start-game-button");
+  const shareUrlInput = document.getElementById("share-url");
+  
+  // Set the share URL
+  shareUrlInput.value = `${location.origin}${location.pathname}?join=${gameId}`;
+  
+  // Set up copy button
+  document.getElementById("copy-url-btn").onclick = () => {
+    shareUrlInput.select();
+    document.execCommand('copy');
+    toast("Share link copied to clipboard!");
+  };
+  
+  db.ref(`/games/${gameId}/state`).on("value", snapshot => {
+    const gameState = snapshot.val() || {};
+    const players = gameState.players || {};
+    const hostId = gameState.hostId;
+    
+    // Update player list
+    list.innerHTML = "";
+    let playerCount = 0;
+    
+    for (let id in players) {
+      playerCount++;
+      const player = players[id];
+      const item = document.createElement("div");
+      item.style.padding = "10px";
+      item.style.margin = "5px 0";
+      item.style.backgroundColor = "rgba(255,255,255,0.1)";
+      item.style.borderRadius = "5px";
+      item.style.display = "flex";
+      item.style.justifyContent = "space-between";
+      item.style.alignItems = "center";
+      
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = player.name;
+      if (id === hostId) {
+        nameSpan.innerHTML += ' <span style="color: gold; font-size: 0.8em;">(Host)</span>';
+      }
+      if (id === clientId) {
+        nameSpan.innerHTML += ' <span style="color: #3498db; font-size: 0.8em;">(You)</span>';
+      }
+      
+      item.appendChild(nameSpan);
+      list.appendChild(item);
+    }
+    
+    // Display player count and max limit
+    const playerCountDisplay = document.createElement("div");
+    playerCountDisplay.style.marginTop = "10px";
+    playerCountDisplay.style.textAlign = "center";
+    playerCountDisplay.innerHTML = `<span style="color: ${playerCount >= 5 ? '#e74c3c' : '#2ecc71'}">Players: ${playerCount}/5</span>`;
+    list.appendChild(playerCountDisplay);
+    
+    // Only show start button to host and only if there are at least 2 players
+    if (clientId === hostId) {
+      startButton.style.display = "block";
+      startButton.disabled = playerCount < 2;
+      if (playerCount < 2) {
+        startButton.textContent = "Waiting for Players...";
+      } else {
+        startButton.textContent = "Start Game";
+      }
+    } else {
+      startButton.style.display = "none";
+    }
+    
+    // Update share URL visibility based on player count
+    const shareContainer = document.getElementById("share-url").parentElement;
+    if (playerCount >= 5) {
+      shareContainer.style.opacity = "0.5";
+      shareUrlInput.setAttribute("disabled", "disabled");
+      document.getElementById("copy-url-btn").setAttribute("disabled", "disabled");
+      shareContainer.title = "Lobby is full (5/5 players)";
+    } else {
+      shareContainer.style.opacity = "1";
+      shareUrlInput.removeAttribute("disabled");
+      document.getElementById("copy-url-btn").removeAttribute("disabled");
+      shareContainer.title = "";
+    }
+    
+    // Check if game has started
+    if (gameState.started) {
+      document.getElementById("lobby-screen").style.display = "none";
+      if (waitingModal) waitingModal.style.display = "none";
+      listenForTurn();
+      restrictEventsToCurrentPlayer();
+      showPlayerIdentity();
+      enforceOnlineCheck();
+    } else {
+      // Show waiting modal if game exists but hasn't started yet
+      if (waitingModal && clientId !== hostId) {
+        waitingModal.style.display = "flex";
+      }
+    }
+  });
+  
+  // Listen specifically for game start status changes
+  db.ref(`/games/${gameId}/state/started`).on("value", snap => {
+    if (snap.val()) {
+      if (waitingModal) waitingModal.style.display = "none";
+    } else {
+      // Only show waiting modal for non-host players
+      db.ref(`/games/${gameId}/state/hostId`).once("value").then(hostSnap => {
+        if (clientId !== hostSnap.val() && waitingModal) {
+          waitingModal.style.display = "flex";
+        }
+      });
+    }
+  });
+}
+
+// Host game button in main menu
+document.getElementById("host-game-btn").onclick = () => {
+  document.getElementById("start-screen").style.display = "none";
+  document.getElementById("multiplayer-setup-screen").style.display = "flex";
+  document.getElementById("multiplayer-setup-title").textContent = "Host a New Game";
+  document.getElementById("game-id-input").style.display = "none";
+  document.getElementById("create-game-button").style.display = "inline-block";
+  document.getElementById("join-game-button").style.display = "none";
+};
+
+// Join game button in main menu
+document.getElementById("join-game-btn").onclick = () => {
+  document.getElementById("start-screen").style.display = "none";
+  document.getElementById("multiplayer-setup-screen").style.display = "flex";
+  document.getElementById("multiplayer-setup-title").textContent = "Join an Existing Game";
+  document.getElementById("game-id-input").style.display = "block";
+  document.getElementById("create-game-button").style.display = "none";
+  document.getElementById("join-game-button").style.display = "inline-block";
+};
+
+// Back button in multiplayer setup
+document.getElementById("back-to-menu-button").onclick = () => {
+  document.getElementById("multiplayer-setup-screen").style.display = "none";
+  document.getElementById("start-screen").style.display = "flex";
+};
+
+// Create game button in setup screen
+document.getElementById("create-game-button").onclick = () => {
   const name = document.getElementById("player-name-input").value.trim();
-  if (!name) return alert("Enter name");
-  joinGame(name).then(() => {
+  if (!name) return alert("Please enter your name");
+  
+  // Generate a new game ID
+  gameId = 'game-' + Math.random().toString(36).substr(2, 6);
+  localStorage.setItem("reinkarma_game_id", gameId);
+  localStorage.setItem("reinkarma_host_id", clientId); // Store host ID for permissions
+  window.currentGameId = gameId;
+  
+  // Set up as host
+  joinGame(name, true).then(() => {
     document.getElementById("multiplayer-setup-screen").style.display = "none";
     document.getElementById("lobby-screen").style.display = "flex";
+    document.getElementById("lobby-game-id").textContent = gameId;
+    document.getElementById("start-game-button").style.display = "block"; // Only host can start
     renderLobby();
+  });
+};
+
+// Join game button in setup screen
+document.getElementById("join-game-button").onclick = () => {
+  const name = document.getElementById("player-name-input").value.trim();
+  const inputGameId = document.getElementById("game-id-input").value.trim();
+  
+  if (!name) return alert("Please enter your name");
+  if (!inputGameId) return alert("Please enter a game ID");
+  
+  // Set the game ID from input
+  gameId = inputGameId;
+  localStorage.setItem("reinkarma_game_id", gameId);
+  
+  // Check if game exists
+  db.ref(`/games/${gameId}`).once("value").then(snapshot => {
+    if (!snapshot.exists()) {
+      alert("Game not found. Please check the Game ID and try again.");
+      return;
+    }
+    
+    // Check player count before attempting to join
+    return db.ref(`/games/${gameId}/state/players`).once("value").then(playersSnapshot => {
+      const players = playersSnapshot.val() || {};
+      const playerCount = Object.keys(players).length;
+      
+      if (playerCount >= 5) {
+        alert("This game is full (5/5 players). Please join another game or create your own.");
+        return;
+      }
+      
+      // Join as player
+      return joinGame(name, false).then(() => {
+        document.getElementById("multiplayer-setup-screen").style.display = "none";
+        document.getElementById("lobby-screen").style.display = "flex";
+        document.getElementById("lobby-game-id").textContent = gameId;
+        document.getElementById("start-game-button").style.display = "none"; // Only host can start
+        renderLobby();
+      });
+    });
+  }).catch(error => {
+    console.error("Error joining game:", error);
   });
 };
 
 document.getElementById("start-game-button").onclick = () => {
   db.ref(`/games/${gameId}/state`).once("value").then(snapshot => {
-    const playerList = Object.keys(snapshot.val().players || {});
-    const firstId = playerList[0];
-    db.ref(`/games/${gameId}/state`).update({ currentPlayerId: firstId, started: true });
+    const gameData = snapshot.val();
+    if (!gameData) return;
+    
+    const playerList = Object.keys(gameData.players || {});
+    if (playerList.length < 1) {
+      alert("At least one player is required to start.");
+      return;
+    }
+    
+    // Randomize first player for fairness
+    const randomIndex = Math.floor(Math.random() * playerList.length);
+    const firstId = playerList[randomIndex];
+    
+    // Assign tokens/colors on game start
+    const playerColors = ["red", "blue", "green", "purple", "orange"];
+    const updated = {};
+    
+    Object.keys(gameData.players).forEach((id, i) => {
+      updated[`/games/${gameId}/state/players/${id}/token`] = i;
+      updated[`/games/${gameId}/state/players/${id}/color`] = playerColors[i];
+    });
+    
+    // Add game start data
+    updated[`/games/${gameId}/state/currentPlayerId`] = firstId;
+    updated[`/games/${gameId}/state/started`] = true;
+    updated[`/games/${gameId}/state/gameStartTime`] = firebase.database.ServerValue.TIMESTAMP;
+    
+    db.ref().update(updated);
   });
-  document.getElementById("lobby-screen").style.display = "none";
 };
 
-// Reconnect logic
-async function reconnectToGame() {
-  if (!gameId || !clientId) return false;
-  const snap = await db.ref(`/games/${gameId}/state/players/${clientId}`).once("value");
-  if (!snap.exists()) {
-    localStorage.removeItem("reinkarma_game_id");
-    localStorage.removeItem("reinkarma_client_id");
-    return false;
-  }
-  const startedSnap = await db.ref(`/games/${gameId}/state/started`).once("value");
-  if (startedSnap.val()) {
-    document.getElementById("multiplayer-setup-screen").style.display = "none";
-    document.getElementById("lobby-screen").style.display = "none";
-    listenForTurn();
-    restrictEventsToCurrentPlayer?.();
-  } else {
-    document.getElementById("multiplayer-setup-screen").style.display = "none";
-    document.getElementById("lobby-screen").style.display = "flex";
-    renderLobby();
-  }
-  return true;
-}
+document.getElementById("leave-lobby-button").onclick = () => {
+  // Remove player from the game
+  db.ref(`/games/${gameId}/state/players/${clientId}`).remove().then(() => {
+    // Check if this was the host
+    db.ref(`/games/${gameId}/state/hostId`).once("value").then(snapshot => {
+      if (snapshot.val() === clientId) {
+        // If host leaves, remove the entire game
+        db.ref(`/games/${gameId}`).remove();
+      }
+      
+      // Clear local storage and return to main menu
+      localStorage.removeItem("reinkarma_game_id");
+      document.getElementById("lobby-screen").style.display = "none";
+      document.getElementById("start-screen").style.display = "flex";
+    });
+  });
+};
 
-// Onload boot logic
+// URL parameter handling for join links
 window.addEventListener("load", async () => {
-  const reconnected = await reconnectToGame();
-  const joined = localStorage.getItem("reinkarma_game_id") && localStorage.getItem("reinkarma_client_id");
-
-  if (!reconnected && !joined) {
+  // Check for join parameter in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const joinGameId = urlParams.get("join");
+  
+  if (joinGameId) {
+    gameId = joinGameId;
+    localStorage.setItem("reinkarma_game_id", gameId);
+    
+    // If we have a client ID, try to reconnect
+    if (localStorage.getItem("reinkarma_client_id")) {
+      const reconnected = await reconnectToGame();
+      if (reconnected) {
+        document.getElementById("multiplayer-setup-screen").style.display = "none";
+        return; // Skip the rest of initialization if reconnected
+      }
+    }
+    
+    // If not reconnected, show join screen with game ID pre-filled
+    document.getElementById("start-screen").style.display = "none";
     document.getElementById("multiplayer-setup-screen").style.display = "flex";
-  } else if (!reconnected) {
-    document.getElementById("lobby-screen").style.display = "flex";
-    renderLobby();
+    document.getElementById("multiplayer-setup-title").textContent = "Join Game";
+    document.getElementById("game-id-input").style.display = "block";
+    document.getElementById("game-id-input").value = joinGameId;
+    document.getElementById("create-game-button").style.display = "none";
+    document.getElementById("join-game-button").style.display = "inline-block";
+    return;
+  }
+  
+  // Check if we need to reconnect to a game
+  if (localStorage.getItem("reinkarma_game_id") && localStorage.getItem("reinkarma_client_id")) {
+    const reconnected = await reconnectToGame();
+    if (!reconnected) {
+      // Clear stale game data if reconnection failed
+      localStorage.removeItem("reinkarma_game_id");
+      localStorage.removeItem("reinkarma_client_id");
+    }
+  }
+  
+  // Start background music when the game loads
+  if (sounds.startScreen && typeof sounds.startScreen.play === 'function') {
+    if (!sounds.startScreen.playing()) {
+      sounds.startScreen.play();
+    }
   }
 });
+
+// ✅ FIX 5: Show 'Waiting for Host to Start' if game not started yet
+const waitingModal = document.createElement("div");
+waitingModal.id = "waiting-modal";
+waitingModal.style.cssText = `
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.9); color: white; z-index: 10000;
+  display: none; align-items: center; justify-content: center;
+  font-size: 2rem; text-align: center;
+`;
+waitingModal.textContent = "Waiting for host to start the game...";
+document.body.appendChild(waitingModal);
+
+// ✅ FIX 6: In-UI Player Feedback: "You are Player X"
+function showPlayerIdentity() {
+  db.ref(`/games/${gameId}/state/players`).once("value").then(snapshot => {
+    const players = Object.keys(snapshot.val() || {});
+    const playerNumber = players.indexOf(clientId) + 1;
+    const msg = document.createElement("div");
+    msg.id = "player-identity-indicator";
+    msg.style.cssText = `position: fixed; top: 10px; right: 10px; background: black; color: white; padding: 10px; border-radius: 5px; z-index: 9999;`;
+    msg.textContent = `You are Player ${playerNumber}`;
+    document.body.appendChild(msg);
+  });
+}
+
+// ✅ FIX 7: Prevent actions if player is disconnected mid-turn
+function enforceOnlineCheck() {
+  db.ref(`/games/${gameId}/state/currentPlayerId`).on("value", snapshot => {
+    const currentId = snapshot.val();
+    if (currentId === clientId) {
+      db.ref(`.info/connected`).on("value", snap => {
+        if (!snap.val()) {
+          alert("You've lost connection. You will be unable to take your turn.");
+          document.getElementById("roll-button").disabled = true;
+          document.getElementById("inventory-button").disabled = true;
+        }
+      });
+    }
+  });
+}
+
+// ✅ FIX 5: Show 'Waiting for Host to Start' if game not started yet
+const waitingModal = document.createElement("div");
+waitingModal.id = "waiting-modal";
+waitingModal.style.cssText = `
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.9); color: white; z-index: 10000;
+  display: none; align-items: center; justify-content: center;
+  font-size: 2rem; text-align: center;
+`;
+waitingModal.textContent = "Waiting for host to start the game...";
+document.body.appendChild(waitingModal);
+
+// ✅ FIX 6: In-UI Player Feedback: "You are Player X"
+function showPlayerIdentity() {
+  db.ref(`/games/${gameId}/state/players`).once("value").then(snapshot => {
+    const players = Object.keys(snapshot.val() || {});
+    const playerNumber = players.indexOf(clientId) + 1;
+    const msg = document.createElement("div");
+    msg.id = "player-identity-indicator";
+    msg.style.cssText = `position: fixed; top: 10px; right: 10px; background: black; color: white; padding: 10px; border-radius: 5px; z-index: 9999;`;
+    msg.textContent = `You are Player ${playerNumber}`;
+    document.body.appendChild(msg);
+  });
+}
+
+// ✅ FIX 7: Prevent actions if player is disconnected mid-turn
+function enforceOnlineCheck() {
+  db.ref(`/games/${gameId}/state/currentPlayerId`).on("value", snapshot => {
+    const currentId = snapshot.val();
+    if (currentId === clientId) {
+      db.ref(`.info/connected`).on("value", snap => {
+        if (!snap.val()) {
+          alert("You've lost connection. You will be unable to take your turn.");
+          document.getElementById("roll-button").disabled = true;
+          document.getElementById("inventory-button").disabled = true;
+        }
+      });
+    }
+  });
+}
+
+function reconnectToGame() {
+  if (!gameId || !clientId) return false;
+  
+  try {
+    // Check if the game exists and if player is still in it
+    const gameSnap = await db.ref(`/games/${gameId}/state`).once("value");
+    if (!gameSnap.exists()) {
+      console.log("Game no longer exists");
+      return false;
+    }
+    
+    const playerSnap = await db.ref(`/games/${gameId}/state/players/${clientId}`).once("value");
+    if (!playerSnap.exists()) {
+      console.log("Player no longer in game");
+      return false;
+    }
+    
+    const gameData = gameSnap.val();
+    
+    // Update UI based on game state
+    document.getElementById("start-screen").style.display = "none";
+    document.getElementById("multiplayer-setup-screen").style.display = "none";
+    
+    if (gameData.started) {
+      // Game is in progress
+      document.getElementById("lobby-screen").style.display = "none";
+      listenForTurn();
+      restrictEventsToCurrentPlayer();
+      toast("Reconnected to game in progress");
+    } else {
+      // Game is in lobby
+      document.getElementById("lobby-screen").style.display = "flex";
+      document.getElementById("lobby-game-id").textContent = gameId;
+      
+      // Show/hide start button based on host status
+      const isHost = gameData.hostId === clientId;
+      document.getElementById("start-game-button").style.display = isHost ? "block" : "none";
+      
+      renderLobby();
+      toast("Reconnected to game lobby");
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error reconnecting to game:", error);
+    return false;
+  }
+}
 </script>
 
+<script>
+function restrictEventsToCurrentPlayer() {
+  db.ref(`/games/${gameId}/state/currentPlayerId`).on("value", snapshot => {
+    const isMyTurn = snapshot.val() === clientId;
+    const board = document.getElementById("game-board");
+    if (board) board.style.pointerEvents = isMyTurn ? "auto" : "none";
+    document.querySelectorAll(".cell").forEach(cell => cell.style.cursor = isMyTurn ? "pointer" : "not-allowed");
+  });
+}
+
+// Pause menu functionality
+document.getElementById("pause-button").onclick = () => {
+  document.getElementById("pause-menu-modal").style.display = "flex";
+};
+
+document.getElementById("resume-game").onclick = () => {
+  document.getElementById("pause-menu-modal").style.display = "none";
+};
+
+document.getElementById("restart-game").onclick = () => {
+  if (confirm("Are you sure you want to restart the game for everyone?")) {
+    if (window.currentGameId) {
+      // For host: reset the game state but keep players
+      if (clientId === localStorage.getItem("reinkarma_host_id")) {
+        db.ref(`/games/${window.currentGameId}/state`).once("value").then(snapshot => {
+          const gameData = snapshot.val();
+          const players = gameData.players;
+          
+          // Reset game state but keep players
+          db.ref(`/games/${window.currentGameId}/state`).update({
+            started: false,
+            currentPlayerId: null,
+            players: players
+          }).then(() => {
+            location.reload();
+          });
+        });
+      } else {
+        // For non-hosts: just reload the page
+        location.reload();
+      }
+    } else {
+      // If no currentGameId, try using gameId
+      if (gameId) {
+        db.ref(`/games/${gameId}`).remove()
+          .then(() => {
+            localStorage.removeItem("reinkarma_game_id");
+            localStorage.removeItem("reinkarma_client_id");
+            location.reload();
+          })
+          .catch(err => {
+            console.error("Restart failed:", err);
+            alert("Error restarting game.");
+          });
+      } else {
+        location.reload();
+      }
+    }
+  }
+};
+
+document.getElementById("end-game-button").onclick = () => {
+  if (confirm("End the current game and return to the main menu?")) {
+    if (window.currentGameId) {
+      // For host: remove the game entirely
+      if (clientId === localStorage.getItem("reinkarma_host_id")) {
+        db.ref(`/games/${window.currentGameId}`).remove()
+          .then(() => {
+            localStorage.removeItem("reinkarma_game_id");
+            location.reload();
+          })
+          .catch(err => {
+            console.error("Error ending game:", err);
+            alert("Unable to end game. Check connection.");
+          });
+      } else {
+        // For non-hosts: just leave the game
+        db.ref(`/games/${window.currentGameId}/state/players/${clientId}`).remove()
+          .then(() => {
+            localStorage.removeItem("reinkarma_game_id");
+            location.reload();
+          });
+      }
+    } else if (gameId) {
+      // If no currentGameId, try using gameId
+      db.ref(`/games/${gameId}`).remove()
+        .then(() => {
+          alert("Game ended.");
+          localStorage.removeItem("reinkarma_game_id");
+          localStorage.removeItem("reinkarma_client_id");
+          location.reload();
+        })
+        .catch(err => {
+          console.error("Error ending game:", err);
+          alert("Unable to end game.");
+        });
+    } else {
+      location.reload();
+    }
+  }
+};
+
+function listenForTurn() {
+  db.ref(`/games/${gameId}/state/currentPlayerId`).on("value", snapshot => {
+    if (snapshot.val() === clientId) {
+      document.getElementById("turn-transition-player-name").innerText = "Your Turn";
+      document.getElementById("turn-transition-modal").style.display = "block";
+    }
+  });
+}
+
+function syncPlayerMove(position, credits, inventory) {
+  const ref = db.ref(`/games/${gameId}/state/players/${clientId}`);
+  ref.update({ position, credits, inventory });
+}
+
+function updateCredits(amount) {
+  const ref = db.ref(`/games/${gameId}/state/players/${clientId}/credits`);
+  ref.transaction(current => (current || 0) + amount);
+}
+
+function updateInventory(treasure) {
+  const invRef = db.ref(`/games/${gameId}/state/players/${clientId}/inventory`);
+  invRef.once("value").then(snap => {
+    const current = snap.val() || [];
+    current.push(treasure);
+    invRef.set(current);
+  });
+}
+
+function endTurn() {
+  db.ref(`/games/${gameId}/state`).once("value").then(snapshot => {
+    const players = Object.keys(snapshot.val().players);
+    const currentIndex = players.indexOf(clientId);
+    const nextId = players[(currentIndex + 1) % players.length];
+    db.ref(`/games/${gameId}/state`).update({ currentPlayerId: nextId });
+    document.getElementById("turn-transition-modal").style.display = "none";
+  });
+}
+
+function showToastIfCurrentPlayer(message) {
+  db.ref(`/games/${gameId}/state/currentPlayerId`).once("value")
+    .then(snap => {
+      if (snap.val() === clientId) {
+        const toast = document.getElementById("toast");
+        toast.innerText = message;
+        toast.style.display = "block";
+        setTimeout(() => toast.style.display = "none", 3000);
+      }
+    });
+}
+</script>
 </body>
 </html>
