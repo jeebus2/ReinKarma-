@@ -3862,8 +3862,17 @@ Industrial Age\tFuture steam punk gear\t500`;
                     rollButton.disabled = false;
                     inventoryButton.disabled = false;
                     
+                    // Find the correct player index in gameState.players
+                    let playerIndex = gameState.currentPlayerIndex;
+                    if (player && player.slotIndex !== undefined) {
+                        const foundIndex = gameState.players.findIndex(p => p.slotIndex === player.slotIndex);
+                        if (foundIndex !== -1) {
+                            playerIndex = foundIndex;
+                        }
+                    }
+                    
                     // Center camera on the current player
-                    centerOnPlayer(gameState.currentPlayerIndex, true);
+                    centerOnPlayer(playerIndex, true);
                     
                     turnTransitionOkButton.onclick = () => {
                         turnTransitionModal.style.display = 'none';
@@ -5368,21 +5377,35 @@ document.getElementById("start-game-button").onclick = () => {
     const gamePlayers = [];
     const hostId = localStorage.getItem("reinkarma_host_id") || clientId;
     
-    // Create a stable order of players for consistent assignment
-    const orderedPlayerList = [...playerList];
+    // Assign player slots based on join order but randomize for game start
+    // This ensures consistent token assignment
+    const playerSlots = {};
+    const shuffledIndices = [...Array(playerList.length).keys()];
+    
+    // Shuffle the indices for random token assignment
+    for (let i = shuffledIndices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledIndices[i], shuffledIndices[j]] = [shuffledIndices[j], shuffledIndices[i]];
+    }
+    
+    // Assign slots to players
+    playerList.forEach((id, originalIndex) => {
+      playerSlots[id] = shuffledIndices[originalIndex];
+    });
     
     // Initialize game state with proper player data
-    orderedPlayerList.forEach((id, i) => {
+    playerList.forEach((id) => {
       if (!players[id]) return; // Skip if player doesn't exist
       
+      const slotIndex = playerSlots[id];
       const playerData = {
         name: players[id].name,
         credits: 1500,
         position: 0,
         inventory: [],
         treasures: [],
-        color: playerColors[i],
-        tokenImage: playerTokenImages[i] || null,
+        color: playerColors[slotIndex],
+        tokenImage: playerTokenImages[slotIndex] || null,
         isAI: false,
         hasInsurance: false,
         skipNextTurn: false,
@@ -5391,7 +5414,8 @@ document.getElementById("start-game-button").onclick = () => {
         bankedPoints: 0,
         offeredInsuranceThisTurn: false,
         initialInsuranceOffered: false,
-        playerIndex: i, // Store the player's index for reference
+        token: slotIndex,
+        slotIndex: slotIndex, // Store the assigned slot for reference
         isHost: id === hostId
       };
       
@@ -5399,8 +5423,8 @@ document.getElementById("start-game-button").onclick = () => {
       gamePlayers.push(playerData);
     });
     
-    // Find the index of the first player in the ordered player list
-    const firstPlayerIndex = orderedPlayerList.indexOf(firstPlayerId);
+    // Find the index of the first player in the player list
+    const firstPlayerIndex = playerList.indexOf(firstPlayerId);
     
     // Initialize full game state
     updated[`/games/${gameId}/state/currentPlayerId`] = firstPlayerId;
@@ -5413,13 +5437,13 @@ document.getElementById("start-game-button").onclick = () => {
     updated[`/games/${gameId}/state/turnCount`] = 0;
     updated[`/games/${gameId}/state/suddenDeathCount`] = 0;
     updated[`/games/${gameId}/state/board`] = []; // Will be populated by createBoard
+    updated[`/games/${gameId}/state/playerSlots`] = playerSlots; // Store slot assignments
     updated[`/games/${gameId}/state/karmicLevels`] = [
       "Scum of the earth",
       "Commonplace and Vulgar",
       "Heroes and Heroines",
       "The Great and The Saintly"
     ];
-    updated[`/games/${gameId}/state/playerOrder`] = orderedPlayerList; // Store the player order
     
     db.ref().update(updated).then(() => {
       // Hide lobby screen for all players
@@ -5732,7 +5756,7 @@ function listenForTurn() {
     const gameData = snapshot.val() || {};
     const currentPlayerId = gameData.currentPlayerId;
     const players = gameData.players || {};
-    const playerOrder = gameData.playerOrder || [];
+    const playerSlots = gameData.playerSlots || {};
     
     // Update game state from Firebase
     if (gameData.gameStarted) {
@@ -5754,76 +5778,52 @@ function listenForTurn() {
       gameState.turnCount = gameData.turnCount || 0;
       gameState.processingMove = gameData.processingMove || false;
       
-      // Update players array using the stored player order for consistency
+      // Update players array
       gameState.players = [];
       let myPlayerIndex = -1;
       
-      // First, create a map of player data by ID
-      const playerDataMap = {};
-      Object.keys(players).forEach(id => {
-        if (players[id]) {
-          playerDataMap[id] = players[id];
+      // First create a mapping of indices to player data to ensure correct order
+      const orderedPlayers = [];
+      
+      Object.keys(players).forEach((id) => {
+        const player = players[id];
+        if (player) {
+          const slotIndex = player.slotIndex !== undefined ? player.slotIndex : 
+                           (playerSlots && playerSlots[id] !== undefined ? playerSlots[id] : 0);
+          
+          if (id === clientId) {
+            myPlayerIndex = slotIndex;
+          }
+          
+          // Create player object with all necessary properties
+          const playerObj = {
+            id: id,
+            name: player.name,
+            credits: player.credits || 1500,
+            position: player.position || 0,
+            inventory: player.inventory || [],
+            treasures: player.treasures || [],
+            color: player.color || '#cccccc',
+            tokenImage: player.tokenImage,
+            isAI: false,
+            hasInsurance: player.hasInsurance || false,
+            skipNextTurn: player.skipNextTurn || false,
+            effects: player.effects || [],
+            karmicLevel: player.karmicLevel || 0,
+            bankedPoints: player.bankedPoints || 0,
+            offeredInsuranceThisTurn: player.offeredInsuranceThisTurn || false,
+            initialInsuranceOffered: player.initialInsuranceOffered || false,
+            slotIndex: slotIndex
+          };
+          
+          // Store in the ordered array at the correct index
+          orderedPlayers[slotIndex] = playerObj;
         }
       });
       
-      // Then use the player order to create the players array in the correct order
-      if (playerOrder && playerOrder.length > 0) {
-        playerOrder.forEach((id, index) => {
-          const player = playerDataMap[id];
-          if (player) {
-            if (id === clientId) {
-              myPlayerIndex = index;
-            }
-            gameState.players.push({
-              id: id,
-              name: player.name,
-              credits: player.credits || 1500,
-              position: player.position || 0,
-              inventory: player.inventory || [],
-              treasures: player.treasures || [],
-              color: player.color || '#cccccc',
-              tokenImage: player.tokenImage,
-              isAI: false,
-              hasInsurance: player.hasInsurance || false,
-              skipNextTurn: player.skipNextTurn || false,
-              effects: player.effects || [],
-              karmicLevel: player.karmicLevel || 0,
-              bankedPoints: player.bankedPoints || 0,
-              offeredInsuranceThisTurn: player.offeredInsuranceThisTurn || false,
-              initialInsuranceOffered: player.initialInsuranceOffered || false,
-              playerIndex: player.playerIndex || index
-            });
-          }
-        });
-      } else {
-        // Fallback to old method if playerOrder is not available
-        Object.keys(players).forEach((id, index) => {
-          const player = players[id];
-          if (player) {
-            if (id === clientId) {
-              myPlayerIndex = index;
-            }
-            gameState.players.push({
-              id: id,
-              name: player.name,
-              credits: player.credits || 1500,
-              position: player.position || 0,
-              inventory: player.inventory || [],
-              treasures: player.treasures || [],
-              color: player.color || '#cccccc',
-              tokenImage: player.tokenImage,
-              isAI: false,
-              hasInsurance: player.hasInsurance || false,
-              skipNextTurn: player.skipNextTurn || false,
-              effects: player.effects || [],
-              karmicLevel: player.karmicLevel || 0,
-              bankedPoints: player.bankedPoints || 0,
-              offeredInsuranceThisTurn: player.offeredInsuranceThisTurn || false,
-              initialInsuranceOffered: player.initialInsuranceOffered || false
-            });
-          }
-        });
-      }
+      // Now add the players to gameState.players in the correct order
+      // Filter out any undefined entries (in case of gaps)
+      gameState.players = orderedPlayers.filter(p => p !== undefined);
       
       // Update UI
       updatePlayerInfo();
@@ -5831,11 +5831,27 @@ function listenForTurn() {
       
       // Find the current player's name for the waiting modal
       let currentPlayerName = "";
+      let currentPlayerObj = null;
+      
       Object.keys(players).forEach(id => {
         if (id === currentPlayerId && players[id]) {
           currentPlayerName = players[id].name;
+          currentPlayerObj = players[id];
         }
       });
+      
+      // Find the correct index in gameState.players for the current player
+      let currentStatePlayerIndex = gameState.players.findIndex(p => p.id === currentPlayerId);
+      if (currentStatePlayerIndex === -1 && currentPlayerObj) {
+        // Fallback: try to find by slotIndex
+        currentStatePlayerIndex = gameState.players.findIndex(p => 
+          p.slotIndex === currentPlayerObj.slotIndex);
+      }
+      
+      // If we found the player, update currentPlayerIndex
+      if (currentStatePlayerIndex !== -1) {
+        gameState.currentPlayerIndex = currentStatePlayerIndex;
+      }
       
       // Show turn transition if it's this player's turn and the modal isn't already showing
       if (currentPlayerId === clientId) {
@@ -5853,9 +5869,7 @@ function listenForTurn() {
           document.getElementById("turn-transition-ok-button").disabled = false;
           
           // Center on the current player's token
-          if (myPlayerIndex !== -1) {
-            centerOnPlayer(gameState.currentPlayerIndex, true);
-          }
+          centerOnPlayer(gameState.currentPlayerIndex, true);
           
           // Set up the OK button to start the turn
           document.getElementById("turn-transition-ok-button").onclick = () => {
@@ -5911,17 +5925,36 @@ function updateInventory(treasure) {
 function endTurn() {
   db.ref(`/games/${gameId}/state`).once("value").then(snapshot => {
     const gameData = snapshot.val() || {};
-    const playerOrder = gameData.playerOrder || [];
-    let players = Object.keys(gameData.players || {});
+    const players = Object.keys(gameData.players || {});
     
-    // Use playerOrder if available for consistent player ordering
-    if (playerOrder && playerOrder.length > 0) {
-      players = playerOrder;
+    // Find the current player's position in the turn order
+    let currentIndex = -1;
+    for (let i = 0; i < players.length; i++) {
+      if (players[i] === clientId) {
+        currentIndex = i;
+        break;
+      }
     }
     
-    const currentIndex = players.indexOf(clientId);
+    if (currentIndex === -1) {
+      console.error("Current player not found in players list");
+      return;
+    }
+    
     const nextIndex = (currentIndex + 1) % players.length;
     const nextId = players[nextIndex];
+    
+    // Find the correct player index in the gameState.players array
+    let nextPlayerStateIndex = -1;
+    if (gameData.players[nextId]) {
+      const nextPlayerSlotIndex = gameData.players[nextId].slotIndex;
+      nextPlayerStateIndex = gameState.players.findIndex(p => p.slotIndex === nextPlayerSlotIndex);
+    }
+    
+    if (nextPlayerStateIndex === -1) {
+      // Fallback to using the raw index if we can't find by slotIndex
+      nextPlayerStateIndex = nextIndex;
+    }
     
     // Reset processing move flag to ensure next player can take their turn
     gameState.processingMove = false;
@@ -5929,7 +5962,7 @@ function endTurn() {
     // Update game state
     db.ref(`/games/${gameId}/state`).update({ 
       currentPlayerId: nextId,
-      currentPlayerIndex: nextIndex,
+      currentPlayerIndex: nextPlayerStateIndex,
       turnCount: (gameData.turnCount || 0) + 1,
       processingMove: false // Ensure this is reset in Firebase too
     });
