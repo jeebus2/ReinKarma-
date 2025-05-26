@@ -3464,15 +3464,16 @@ Industrial Age\tFuture steam punk gear\t500`;
             rollButton.disabled = true; // Ensure it's disabled at the start of processing the roll
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
             
-            // Disable roll button during turn
-            rollButton.disabled = true;
-            
             // Roll the dice
             const diceResult = rollTwoDice();
             animateDiceRoll(diceResult);
             
             // Increment turn count
             gameState.turnCount++;
+            if (gameId) {
+                // Update turn count in Firebase
+                db.ref(`/games/${gameId}/state/turnCount`).set(gameState.turnCount);
+            }
             
             // Check if doubles were rolled
             if (diceResult.isDoubles && !currentPlayer.isAI) {
@@ -3494,6 +3495,11 @@ Industrial Age\tFuture steam punk gear\t500`;
                         const oldPosForMove = currentPlayer.position;
                         const targetPosForMove = Math.min(oldPosForMove + diceResult.total, 169);
                         
+                        // Update position in Firebase for multiplayer
+                        if (gameId) {
+                            db.ref(`/games/${gameId}/state/players/${clientId}/position`).set(targetPosForMove);
+                        }
+                        
                         animateMovement(gameState.currentPlayerIndex, oldPosForMove, targetPosForMove, true, () => {
                             currentPlayer.offeredInsuranceThisTurn = false; 
                             const landedEra = getEraFromPosition(targetPosForMove);
@@ -3505,6 +3511,11 @@ Industrial Age\tFuture steam punk gear\t500`;
                                 gameState.lifetimeCredits[gameState.currentPlayerIndex] += 200;
                                 toast(`${currentPlayer.name} has entered the ${landedEra.charAt(0).toUpperCase() + landedEra.slice(1)} Era and received 200 credits!`);
                                 updatePlayerInfo(); 
+                                
+                                // Update credits in Firebase for multiplayer
+                                if (gameId) {
+                                    db.ref(`/games/${gameId}/state/players/${clientId}/credits`).set(currentPlayer.credits);
+                                }
 
                                 currentPlayer.offeredInsuranceThisTurn = true;
                                 offerInsuranceConditional(true, () => { 
@@ -3525,6 +3536,11 @@ Industrial Age\tFuture steam punk gear\t500`;
                         const oldPosForMove = currentPlayer.position;
                         const targetPosForMove = Math.max(oldPosForMove - diceResult.total, 0);
                         
+                        // Update position in Firebase for multiplayer
+                        if (gameId) {
+                            db.ref(`/games/${gameId}/state/players/${clientId}/position`).set(targetPosForMove);
+                        }
+                        
                         animateMovement(gameState.currentPlayerIndex, oldPosForMove, targetPosForMove, false, () => {
                             currentPlayer.offeredInsuranceThisTurn = false; 
                             const landedEra = getEraFromPosition(targetPosForMove);
@@ -3536,6 +3552,11 @@ Industrial Age\tFuture steam punk gear\t500`;
                                 gameState.lifetimeCredits[gameState.currentPlayerIndex] += 200;
                                 toast(`${currentPlayer.name} has entered the ${landedEra.charAt(0).toUpperCase() + landedEra.slice(1)} Era and received 200 credits!`);
                                 updatePlayerInfo(); 
+                                
+                                // Update credits in Firebase for multiplayer
+                                if (gameId) {
+                                    db.ref(`/games/${gameId}/state/players/${clientId}/credits`).set(currentPlayer.credits);
+                                }
 
                                 currentPlayer.offeredInsuranceThisTurn = true;
                                 offerInsuranceConditional(true, () => { 
@@ -3554,6 +3575,11 @@ Industrial Age\tFuture steam punk gear\t500`;
             // Proceed with normal movement
             const oldPosForMove = currentPlayer.position; // Capture position before animation starts
             const targetPosForMove = Math.min(oldPosForMove + diceResult.total, 169);
+            
+            // Update position in Firebase for multiplayer
+            if (gameId) {
+                db.ref(`/games/${gameId}/state/players/${clientId}/position`).set(targetPosForMove);
+            }
 
             animateMovement(gameState.currentPlayerIndex, oldPosForMove, targetPosForMove, true, () => {
                 // Callback after animation completes
@@ -3567,6 +3593,11 @@ Industrial Age\tFuture steam punk gear\t500`;
                     gameState.lifetimeCredits[gameState.currentPlayerIndex] += 200;
                     toast(`${currentPlayer.name} has entered the ${landedEra.charAt(0).toUpperCase() + landedEra.slice(1)} Era and received 200 credits!`);
                     updatePlayerInfo(); 
+                    
+                    // Update credits in Firebase for multiplayer
+                    if (gameId) {
+                        db.ref(`/games/${gameId}/state/players/${clientId}/credits`).set(currentPlayer.credits);
+                    }
 
                     currentPlayer.offeredInsuranceThisTurn = true;
                     offerInsuranceConditional(true, () => { 
@@ -3582,26 +3613,43 @@ Industrial Age\tFuture steam punk gear\t500`;
         function rollDice() {
             if (!gameState.gameStarted) return;
             if (gameState.processingMove) return; // Prevent multiple rolls during processing
-            gameState.processingMove = true; // Ensure the game state reflects that a move is being processed
             
-            const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-            
-            // Disable roll button by default, enable for human player later if it's their turn
-            rollButton.disabled = true;
-
-            // Check if it's an AI player's turn
-
-            
-            // Check if player can ascend to next karmic level
-            if (checkKarmicLevel(gameState.currentPlayerIndex)) {
-                // checkKarmicLevel shows a modal, and its buttons will call proceedWithHumanRoll.
-                return; // Stop here, wait for ascension decision.
+            // For multiplayer, verify it's actually this player's turn
+            if (gameId) {
+                db.ref(`/games/${gameId}/state/currentPlayerId`).once("value").then(snapshot => {
+                    if (snapshot.val() !== clientId) {
+                        toast("It's not your turn!");
+                        return;
+                    }
+                    
+                    // Update processing move state in Firebase
+                    db.ref(`/games/${gameId}/state/processingMove`).set(true);
+                    gameState.processingMove = true;
+                    
+                    // Continue with roll
+                    continueWithRoll();
+                });
+            } else {
+                // Single player mode
+                gameState.processingMove = true;
+                continueWithRoll();
             }
-
-            // If no ascension pathway taken by checkKarmicLevel, proceed directly.
-            // Ensure roll button is disabled while human player makes ascension choice
-            rollButton.disabled = true;
-            proceedWithHumanRoll();
+            
+            function continueWithRoll() {
+                const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+                
+                // Disable roll button
+                rollButton.disabled = true;
+                
+                // Check if player can ascend to next karmic level
+                if (checkKarmicLevel(gameState.currentPlayerIndex)) {
+                    // checkKarmicLevel shows a modal, and its buttons will call proceedWithHumanRoll
+                    return; // Stop here, wait for ascension decision
+                }
+                
+                // If no ascension pathway taken by checkKarmicLevel, proceed directly
+                proceedWithHumanRoll();
+            }
         }
         
         // Handle AI player turn
@@ -3748,49 +3796,73 @@ Industrial Age\tFuture steam punk gear\t500`;
             // Reset processing flag
             gameState.processingMove = false;
             
-            // Enable roll button (will be re-enabled specifically for human player in proceedWithTurn)
-            // rollButton.disabled = false; 
-            
             // Check if game is over (someone reached Nirvana)
             if (gameState.players.some(p => p.position === 169)) {
                 endGame();
                 return;
             }
             
-            // IMPORTANT: Keep the current player centered until we show the transition modal
-            // This ensures the active player remains visible throughout their entire turn
-            // Force an immediate centering with true parameter to ensure perfect centering
+            // Keep the current player centered until we show the transition modal
             centerOnPlayer(gameState.currentPlayerIndex, true);
-            updatePlayerInfo(); // Update info to reflect the end of the current player's turn visuals before modal
+            updatePlayerInfo(); // Update info to reflect the end of the current player's turn
             
-            // Move to next player index
-            gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
-            const playerForThisTurn = gameState.players[gameState.currentPlayerIndex];
-
-            // Update player info display early so the highlight moves immediately
-            updatePlayerInfo(); 
-            
-            // Show the transition modal. Camera centering for the new player happens inside showTurnTransitionModal.
-            showTurnTransitionModal(playerForThisTurn);
+            if (gameId) {
+                // Multiplayer: End turn and update Firebase
+                endTurn();
+            } else {
+                // Single player: Move to next player index locally
+                gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+                const playerForThisTurn = gameState.players[gameState.currentPlayerIndex];
+                
+                // Update player info display early so the highlight moves immediately
+                updatePlayerInfo(); 
+                
+                // Show the transition modal
+                showTurnTransitionModal(playerForThisTurn);
+            }
         }
 
         function showTurnTransitionModal(player) {
-            turnTransitionPlayerName.textContent = `${player.name}'s Turn`;
-            turnTransitionMessage.textContent = "It's your turn!";
-            
-            // CRITICAL: Only NOW center camera on the new active player when the modal is shown
-            // This ensures the previous player remains perfectly centered until this modal appears
-            // The true parameter forces an immediate camera transition without animation
-            centerOnPlayer(gameState.currentPlayerIndex, true);
-            
-            turnTransitionOkButton.onclick = () => {
-                turnTransitionModal.style.display = 'none';
-                proceedWithTurn(player); 
-            };
-
-            turnTransitionModal.style.display = 'block';
-
-            turnTransitionOkButton.disabled = false; // Ensure button is enabled for human player
+            // For multiplayer, check if this is actually the current player's client
+            if (gameId) {
+                db.ref(`/games/${gameId}/state/currentPlayerId`).once("value").then(snapshot => {
+                    const currentPlayerId = snapshot.val();
+                    if (currentPlayerId !== clientId) {
+                        // Not this player's turn, don't show the modal
+                        return;
+                    }
+                    
+                    // This is the current player, show the modal
+                    turnTransitionPlayerName.textContent = `Your Turn`;
+                    turnTransitionMessage.textContent = "It's your turn!";
+                    
+                    // Center camera on the current player
+                    centerOnPlayer(gameState.currentPlayerIndex, true);
+                    
+                    turnTransitionOkButton.onclick = () => {
+                        turnTransitionModal.style.display = 'none';
+                        proceedWithTurn(player);
+                    };
+                    
+                    turnTransitionModal.style.display = 'block';
+                    turnTransitionOkButton.disabled = false;
+                });
+            } else {
+                // Single player mode
+                turnTransitionPlayerName.textContent = `${player.name}'s Turn`;
+                turnTransitionMessage.textContent = "It's your turn!";
+                
+                // Center camera on the current player
+                centerOnPlayer(gameState.currentPlayerIndex, true);
+                
+                turnTransitionOkButton.onclick = () => {
+                    turnTransitionModal.style.display = 'none';
+                    proceedWithTurn(player); 
+                };
+                
+                turnTransitionModal.style.display = 'block';
+                turnTransitionOkButton.disabled = false;
+            }
         }
 
         function proceedWithTurn(playerForThisTurn) {
@@ -5235,23 +5307,93 @@ document.getElementById("start-game-button").onclick = () => {
       alert("At least one player is required to start.");
       return;
     }
-    const firstId = playerList[0];
     
-    // Assign tokens/colors on game start
-    const playerColors = ["red", "blue", "green", "purple", "orange"];
-    const updated = {};
-    
-    Object.keys(players).forEach((id, i) => {
-      updated[`/games/${gameId}/state/players/${id}/token`] = i;
-      updated[`/games/${gameId}/state/players/${id}/color`] = playerColors[i];
+    // Ensure host is first player (player one)
+    const hostId = localStorage.getItem("reinkarma_host_id") || clientId;
+    let orderedPlayerList = [hostId];
+    playerList.forEach(id => {
+      if (id !== hostId) {
+        orderedPlayerList.push(id);
+      }
     });
     
-    // Add game start data
-    updated[`/games/${gameId}/state/currentPlayerId`] = firstId;
+    // Assign tokens/colors on game start
+    const playerColors = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6"];
+    const playerTokenImages = [
+      "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F5A59C78B-2A7B-4405-9873-0707F89C3BA6.png?alt=media&token=257fc43c-1796-4104-a6b3-2c33a9cf9b9a",
+      "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FE9272CBA-A623-4612-AE25-6ACE4F7BB25F.png?alt=media&token=11c3b652-52c4-4fd5-8e91-d68d97aecc4e",
+      "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F41CB6EDC-277B-45BE-AE47-031BF571FFE6.png?alt=media&token=3037e7ca-20c3-4736-841b-1ddcf1bc3296",
+      "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FE0BDF60A-E089-4252-9C21-BE6B48463BAF.png?alt=media&token=bbbf7f52-4764-4201-9831-9571f2c56f0e",
+      "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F4260A2E8-0F73-4F09-8824-0478437D665B.png?alt=media&token=ca7d76e7-8347-4224-8acf-6788a14524bf"
+    ];
+    
+    const updated = {};
+    const gamePlayers = [];
+    
+    // Initialize game state with proper player data
+    orderedPlayerList.forEach((id, i) => {
+      if (!players[id]) return; // Skip if player doesn't exist
+      
+      const playerData = {
+        name: players[id].name,
+        credits: 1500,
+        position: 0,
+        inventory: [],
+        treasures: [],
+        color: playerColors[i],
+        tokenImage: playerTokenImages[i] || null,
+        isAI: false,
+        hasInsurance: false,
+        skipNextTurn: false,
+        effects: [],
+        karmicLevel: 0,
+        bankedPoints: 0,
+        offeredInsuranceThisTurn: false,
+        initialInsuranceOffered: false,
+        token: i,
+        isHost: id === hostId
+      };
+      
+      updated[`/games/${gameId}/state/players/${id}`] = {...players[id], ...playerData};
+      gamePlayers.push(playerData);
+    });
+    
+    // Initialize full game state
+    updated[`/games/${gameId}/state/currentPlayerId`] = hostId;
     updated[`/games/${gameId}/state/started`] = true;
     updated[`/games/${gameId}/state/gameStartTime`] = firebase.database.ServerValue.TIMESTAMP;
+    updated[`/games/${gameId}/state/currentPlayerIndex`] = 0;
+    updated[`/games/${gameId}/state/gameStarted`] = true;
+    updated[`/games/${gameId}/state/processingMove`] = false;
+    updated[`/games/${gameId}/state/charityPool`] = 0;
+    updated[`/games/${gameId}/state/turnCount`] = 0;
+    updated[`/games/${gameId}/state/suddenDeathCount`] = 0;
+    updated[`/games/${gameId}/state/board`] = []; // Will be populated by createBoard
+    updated[`/games/${gameId}/state/karmicLevels`] = [
+      "Scum of the earth",
+      "Commonplace and Vulgar",
+      "Heroes and Heroines",
+      "The Great and The Saintly"
+    ];
     
-    db.ref().update(updated);
+    db.ref().update(updated).then(() => {
+      // Hide lobby screen
+      document.getElementById("lobby-screen").style.display = "none";
+      
+      // Initialize the game for all players
+      createBoard();
+      populateAllCardData();
+      updatePlayerInfo();
+      placePlayerTokens();
+      setupEventListeners();
+      
+      // Show turn transition for first player (host)
+      if (clientId === hostId) {
+        setTimeout(() => {
+          showTurnTransitionModal(gamePlayers[0]);
+        }, 1000);
+      }
+    });
   });
 };
 
@@ -5518,17 +5660,71 @@ document.getElementById("end-game-button").onclick = () => {
 };
 
 function listenForTurn() {
-  db.ref(`/games/${gameId}/state/currentPlayerId`).on("value", snapshot => {
-    if (snapshot.val() === clientId) {
-      document.getElementById("turn-transition-player-name").innerText = "Your Turn";
-      document.getElementById("turn-transition-modal").style.display = "block";
+  db.ref(`/games/${gameId}/state`).on("value", snapshot => {
+    const gameData = snapshot.val() || {};
+    const currentPlayerId = gameData.currentPlayerId;
+    const players = gameData.players || {};
+    
+    // Update game state from Firebase
+    if (gameData.gameStarted) {
+      gameState.gameStarted = true;
+      gameState.currentPlayerIndex = gameData.currentPlayerIndex || 0;
+      gameState.charityPool = gameData.charityPool || 0;
+      gameState.turnCount = gameData.turnCount || 0;
+      gameState.processingMove = gameData.processingMove || false;
+      
+      // Update players array
+      gameState.players = [];
+      Object.keys(players).forEach(id => {
+        const player = players[id];
+        if (player) {
+          gameState.players.push({
+            id: id,
+            name: player.name,
+            credits: player.credits || 1500,
+            position: player.position || 0,
+            inventory: player.inventory || [],
+            treasures: player.treasures || [],
+            color: player.color || '#cccccc',
+            tokenImage: player.tokenImage,
+            isAI: false,
+            hasInsurance: player.hasInsurance || false,
+            skipNextTurn: player.skipNextTurn || false,
+            effects: player.effects || [],
+            karmicLevel: player.karmicLevel || 0,
+            bankedPoints: player.bankedPoints || 0,
+            offeredInsuranceThisTurn: player.offeredInsuranceThisTurn || false,
+            initialInsuranceOffered: player.initialInsuranceOffered || false
+          });
+        }
+      });
+      
+      // Update UI
+      updatePlayerInfo();
+      placePlayerTokens();
+      
+      // Show turn transition if it's this player's turn
+      if (currentPlayerId === clientId) {
+        // Enable controls for current player
+        rollButton.disabled = false;
+        inventoryButton.disabled = false;
+        document.getElementById("turn-transition-player-name").innerText = "Your Turn";
+        document.getElementById("turn-transition-modal").style.display = "block";
+      } else {
+        // Disable controls for other players
+        rollButton.disabled = true;
+        inventoryButton.disabled = false; // Allow viewing inventory
+      }
     }
   });
 }
 
-function syncPlayerMove(position, credits, inventory) {
+function syncPlayerMove(position, credits, inventory, treasures) {
   const ref = db.ref(`/games/${gameId}/state/players/${clientId}`);
-  ref.update({ position, credits, inventory });
+  const updates = { position, credits };
+  if (inventory) updates.inventory = inventory;
+  if (treasures) updates.treasures = treasures;
+  ref.update(updates);
 }
 
 function updateCredits(amount) {
@@ -5547,11 +5743,24 @@ function updateInventory(treasure) {
 
 function endTurn() {
   db.ref(`/games/${gameId}/state`).once("value").then(snapshot => {
-    const players = Object.keys(snapshot.val().players);
+    const gameData = snapshot.val() || {};
+    const players = Object.keys(gameData.players || {});
     const currentIndex = players.indexOf(clientId);
-    const nextId = players[(currentIndex + 1) % players.length];
-    db.ref(`/games/${gameId}/state`).update({ currentPlayerId: nextId });
+    const nextIndex = (currentIndex + 1) % players.length;
+    const nextId = players[nextIndex];
+    
+    // Update game state
+    db.ref(`/games/${gameId}/state`).update({ 
+      currentPlayerId: nextId,
+      currentPlayerIndex: nextIndex,
+      turnCount: (gameData.turnCount || 0) + 1
+    });
+    
+    // Hide turn transition modal
     document.getElementById("turn-transition-modal").style.display = "none";
+    
+    // Disable controls for this player
+    rollButton.disabled = true;
   });
 }
 
