@@ -3907,103 +3907,56 @@ Industrial Age\tFuture steam punk gear\t500`;
 
         // Track if the turn transition modal has been shown for the current turn
 let turnTransitionModalShown = false;
+let lastPlayerIdForTurnModal = null; // Tracks the Firebase currentPlayerId from the PREVIOUS state update
 
-function showTurnTransitionModal(player) {
-            // For multiplayer, check if this is actually the current player's client
-            if (gameId) {
-                db.ref(`/games/${gameId}/state/currentPlayerId`).once("value").then(snapshot => {
-                    const currentPlayerId = snapshot.val();
-                    if (currentPlayerId !== clientId) {
-                        // Not this player's turn, don't show the modal
-                        return;
-                    }
-                    
-                    // Check if modal is already showing or has been shown for this turn to prevent duplicates
-                    if (turnTransitionModal.style.display === 'block' || turnTransitionModalShown) {
-                        return;
-                    }
-                    
-                    // Reset processing move flag to ensure player can take their turn
-                    gameState.processingMove = false;
-                    db.ref(`/games/${gameId}/state/processingMove`).set(false);
-                    
-                    // This is the current player, show the modal
-                    turnTransitionPlayerName.textContent = `Your Turn`;
-                    turnTransitionMessage.textContent = "It's your turn!";
-                    
-                    // Enable controls for current player
-                    rollButton.disabled = false;
-                    inventoryButton.disabled = false;
-                    
-                    // Find the correct player index in gameState.players
-                    let playerIndex = gameState.currentPlayerIndex;
-                    if (player && player.slotIndex !== undefined) {
-                        const foundIndex = gameState.players.findIndex(p => p.slotIndex === player.slotIndex);
-                        if (foundIndex !== -1) {
-                            playerIndex = foundIndex;
-                        }
-                    }
-                    
-                    // Center camera on the current player
-                    centerOnPlayer(playerIndex, true);
-                    
-                    turnTransitionOkButton.onclick = () => {
-                        turnTransitionModal.style.display = 'none';
-                        turnTransitionModalShown = true; // Mark that we've shown the modal for this turn
-                        proceedWithTurn(player);
-                    };
-                    
-                    turnTransitionModal.style.display = 'block';
-                    turnTransitionOkButton.disabled = false;
-                });
-            } else {
-                // Single player mode
-                // Check if modal is already showing or has been shown for this turn to prevent duplicates
-                if (turnTransitionModal.style.display === 'block' || turnTransitionModalShown) {
-                    return;
-                }
-                
-                // Reset processing move flag to ensure player can take their turn
-                gameState.processingMove = false;
-                
-                turnTransitionPlayerName.textContent = `${player.name}'s Turn`;
-                turnTransitionMessage.textContent = "It's your turn!";
-                
-                // Enable controls for current player
-                rollButton.disabled = false;
-                inventoryButton.disabled = false;
-                
-                // Center camera on the current player
-                centerOnPlayer(gameState.currentPlayerIndex, true);
-                
-                turnTransitionOkButton.onclick = () => {
-                    turnTransitionModal.style.display = 'none';
-                    turnTransitionModalShown = true; // Mark that we've shown the modal for this turn
-                    proceedWithTurn(player); 
-                };
-                
-                turnTransitionModal.style.display = 'block';
-                turnTransitionOkButton.disabled = false;
-            }
-        }
+function showTurnTransitionModal(player) { // Player object for whom the turn is starting
+    // Ensure modal is not already visible (visual safeguard)
+    if (turnTransitionModal.style.display === 'block') {
+        console.warn("showTurnTransitionModal called while modal already visible.");
+        return;
+    }
+
+    gameState.processingMove = false; // Ensure player can act.
+    if(gameId) db.ref(`/games/${gameId}/state/processingMove`).set(false); // Sync with Firebase
+
+    turnTransitionPlayerName.textContent = gameId ? "Your Turn" : `${player.name}'s Turn`;
+    turnTransitionMessage.textContent = "It's your turn!";
+
+    rollButton.disabled = true; // Keep disabled until proceedWithTurn verifies all pre-roll steps
+    inventoryButton.disabled = false; // Inventory can be opened.
+
+    const playerIndexForCentering = gameState.players.findIndex(p => p.id === player.id);
+    if (playerIndexForCentering !== -1) {
+        centerOnPlayer(playerIndexForCentering, true);
+    }
+
+    turnTransitionOkButton.onclick = () => {
+        turnTransitionModal.style.display = 'none';
+        // `turnTransitionModalShown` is already true, set by the caller (listenForTurn).
+        proceedWithTurn(player); // Pass the correct player object
+    };
+
+    turnTransitionModal.style.display = 'block';
+    turnTransitionOkButton.disabled = false;
+}
 
         function proceedWithTurn(playerForThisTurn) {
-            // Make sure we have the correct player object with all properties
-            let currentPlayerObj = null;
-            for (let i = 0; i < gameState.players.length; i++) {
-                if (gameId && gameState.players[i].id === clientId) {
-                    currentPlayerObj = gameState.players[i];
-                    break;
-                } else if (!gameId && i === gameState.currentPlayerIndex) {
-                    currentPlayerObj = gameState.players[i];
-                    break;
+            let currentPlayerObj = playerForThisTurn; // Directly use the passed player object
+
+            if (!currentPlayerObj) {
+                console.error("proceedWithTurn called with invalid player object. Attempting fallback.");
+                const currentFirebasePlayerId = lastPlayerIdForTurnModal; 
+                currentPlayerObj = gameState.players.find(p => p.id === currentFirebasePlayerId);
+                if (!currentPlayerObj && !gameId) { // Single player fallback
+                    currentPlayerObj = gameState.players[gameState.currentPlayerIndex];
+                }
+                if(!currentPlayerObj) {
+                    toast("Error starting turn: Player data missing.");
+                    rollButton.disabled = true; // Ensure button is disabled if error
+                    return;
                 }
             }
-            
-            // If we couldn't find the player, use the passed player object
-            if (!currentPlayerObj) {
-                currentPlayerObj = playerForThisTurn;
-            }
+            gameState.processingMove = false; // Ensure this is false before turn actions begin.
             
             // Offer initial insurance if it's their first turn and not yet offered
             if (!currentPlayerObj.initialInsuranceOffered) {
@@ -4015,17 +3968,18 @@ function showTurnTransitionModal(player) {
                 const insuranceCost = 500;
 
                 const startPlayerTurnLogic = () => {
-                    if (currentPlayerObj.skipNextTurn) {
+                    if (currentPlayerObj.skipNextTurn) { // Use the passed parameter
                         toast(`${currentPlayerObj.name} misses their turn!`);
                         currentPlayerObj.skipNextTurn = false; // Consume the skip
                         if (gameId) {
-                            db.ref(`/games/${gameId}/state/players/${clientId}/skipNextTurn`).set(false);
+                            db.ref(`/games/${gameId}/state/players/${currentPlayerObj.id}/skipNextTurn`).set(false); // Use currentPlayerObj.id
                         }
                         setTimeout(() => { nextPlayer(); }, 1500);
                         return;
                     }
                     rollButton.disabled = false;
                     toast(`It's ${currentPlayerObj.name}'s turn. Roll the dice!`);
+                startPlayerTurnLogic(currentPlayerObj); // Pass the player object here
                 };
 
                 // Human Player Logic for initial insurance
@@ -4060,7 +4014,7 @@ function showTurnTransitionModal(player) {
                     }
                     hideEvent();
                     updatePlayerInfo();
-                    startPlayerTurnLogic(); // Proceed with turn logic
+                    startPlayerTurnLogic(currentPlayerObj); // Proceed with turn logic, passing the player object
                 };
                 eventButtons.appendChild(yesButton);
 
@@ -4071,7 +4025,7 @@ function showTurnTransitionModal(player) {
                     toast(`${currentPlayerObj.name} declined initial insurance.`);
                     hideEvent();
                     updatePlayerInfo();
-                    startPlayerTurnLogic(); // Proceed with turn logic
+                    startPlayerTurnLogic(currentPlayerObj); // Proceed with turn logic, passing the player object
                 };
                 eventButtons.appendChild(noButton);
                 return; // Human needs to click, then turn proceeds via startPlayerTurnLogic
@@ -4095,7 +4049,7 @@ function showTurnTransitionModal(player) {
             }
             
             // Human player's turn
-            rollButton.disabled = false; // Enable roll button ONLY for the human player whose turn it is.
+            rollButton.disabled = false; // NOW enable it, after all checks (insurance, skip turn).
             toast(`It's ${currentPlayerObj.name}'s turn. Roll the dice!`);
         }
         
@@ -5750,35 +5704,7 @@ function restrictEventsToCurrentPlayer() {
     rollButton.disabled = !isMyTurn || gameState.processingMove;
     inventoryButton.disabled = false; // Always allow viewing inventory
     
-    // Only show turn transition modal on actual turn changes and if not already shown for this turn
-    if (isMyTurn && isTurnChange && !turnTransitionModalShown && 
-        document.getElementById("turn-transition-modal").style.display !== "block") {
-      // Reset the turn transition modal shown flag when the turn changes
-      if (isTurnChange) {
-        turnTransitionModalShown = false;
-      }
-      
-      // Find my player object
-      let myPlayerIndex = -1;
-      for (let i = 0; i < gameState.players.length; i++) {
-        if (gameState.players[i].id === clientId) {
-          myPlayerIndex = i;
-          break;
-        }
-      }
-      
-      if (myPlayerIndex !== -1) {
-        // Add a small delay to prevent race conditions with other modal triggers
-        setTimeout(() => {
-          // Double-check that no other modals are showing and the modal hasn't been shown yet
-          if (!turnTransitionModalShown && 
-              document.getElementById("turn-transition-modal").style.display !== "block" && 
-              document.getElementById("event-display").style.display !== "block") {
-            showTurnTransitionModal(gameState.players[myPlayerIndex]);
-          }
-        }, 300);
-      }
-    }
+    
   });
 }
 
@@ -5875,10 +5801,8 @@ document.getElementById("end-game-button").onclick = () => {
 };
 
 function listenForTurn() {
-  // Track the last player ID to detect actual turn changes
-  let lastPlayerId = null;
-  // Add a flag to track if the turn modal has been shown for the current turn
-  let turnModalShownForCurrentTurn = false;
+  // `lastPlayerIdForTurnModal` is already defined globally or at a higher scope
+  // `turnTransitionModalShown` is already defined globally or at a higher scope
   
   db.ref(`/games/${gameId}/state`).on("value", snapshot => {
     const gameData = snapshot.val() || {};
@@ -5911,7 +5835,7 @@ function listenForTurn() {
       let myPlayerIndex = -1;
       
       // First create a mapping of indices to player data to ensure correct order
-      const orderedPlayers = [];
+      const orderedPlayers = new Array(Object.keys(players).length);
       
       Object.keys(players).forEach((id) => {
         const player = players[id];
@@ -5981,72 +5905,54 @@ function listenForTurn() {
         gameState.currentPlayerIndex = currentStatePlayerIndex;
       }
       
-      // Check if this is an actual turn change (different player than before)
-      const isTurnChange = lastPlayerId !== null && lastPlayerId !== currentPlayerId;
-      // First turn of the game
-      const isFirstTurn = lastPlayerId === null && currentPlayerId !== null;
-      
-      // Reset the turn modal flag when the turn changes to a different player
-      if (isTurnChange) {
-        turnModalShownForCurrentTurn = false;
-      }
-      
-      // Update lastPlayerId for next check
-      lastPlayerId = currentPlayerId;
-      
-      // Show turn transition only on actual turn changes or first turn, and only if not already shown for this turn
-      if (currentPlayerId === clientId && (isTurnChange || isFirstTurn) && !turnModalShownForCurrentTurn) {
-        // Hide waiting modal if it's showing
-        document.getElementById("waiting-for-player-modal").style.display = "none";
-        
-        // Only show turn transition modal if it's not already showing
-        if (document.getElementById("turn-transition-modal").style.display !== "block" && 
-            document.getElementById("event-display").style.display !== "block") {
-          // Enable controls for current player
-          rollButton.disabled = false;
+      const isMyClientTurn = currentPlayerId === clientId;
+      // A "new turn" for me means the currentPlayerIdFromFirebase just changed TO my clientId
+      // AND it wasn't my clientId in the previous Firebase state update.
+      const isNewTurnForMyClient = isMyClientTurn && (lastPlayerIdForTurnModal !== currentPlayerId);
+
+      if (isMyClientTurn) {
+          document.getElementById("waiting-for-player-modal").style.display = "none";
+          rollButton.disabled = gameState.processingMove; // General enablement, proceedWithTurn finalizes this
           inventoryButton.disabled = false;
-          document.getElementById("turn-transition-player-name").innerText = "Your Turn";
-          document.getElementById("turn-transition-message").textContent = "It's your turn!";
-          document.getElementById("turn-transition-modal").style.display = "block";
-          document.getElementById("turn-transition-ok-button").disabled = false;
-          
-          // Center on the current player's token
-          centerOnPlayer(gameState.currentPlayerIndex, true);
-          
-          // Set up the OK button to start the turn
-          document.getElementById("turn-transition-ok-button").onclick = () => {
-            document.getElementById("turn-transition-modal").style.display = "none";
-            document.getElementById("waiting-for-player-modal").style.display = "none"; // Also hide waiting modal
-            proceedWithTurn(gameState.players[gameState.currentPlayerIndex]);
-          };
-          
-          // Mark that we've shown the modal for this turn
-          turnModalShownForCurrentTurn = true;
-        }
-      } else if (currentPlayerId === clientId) {
-        // It's still this player's turn (not a turn change)
-        // Just make sure controls are enabled
-        rollButton.disabled = gameState.processingMove;
-        inventoryButton.disabled = false;
-        document.getElementById("waiting-for-player-modal").style.display = "none";
-      } else {
-        // It's not this player's turn
-        // Hide turn transition modal if it's showing
-        document.getElementById("turn-transition-modal").style.display = "none";
-        
-        // Show waiting modal with current player's name
-        const waitingModal = document.getElementById("waiting-for-player-modal");
-        const waitingMessage = document.getElementById("waiting-for-player-message");
-        waitingMessage.textContent = `Waiting for ${currentPlayerName}'s turn...`;
-        waitingModal.style.display = "block";
-        
-        // Disable controls for other players
-        rollButton.disabled = true;
-        inventoryButton.disabled = false; // Allow viewing inventory
-        
-        // Center on the current active player's token for all players
-        centerOnPlayer(gameState.currentPlayerIndex, true);
+
+          if (isNewTurnForMyClient && !turnTransitionModalShown) {
+              // This is the critical point: a genuinely new turn has started for this client,
+              // and we haven't shown the "Your Turn" modal for this specific turn instance yet.
+              const myPlayerObject = gameState.players.find(p => p.id === clientId);
+              if (myPlayerObject) {
+                  // Check against other major modals as a safeguard
+                  if (document.getElementById("event-display").style.display === 'none' &&
+                      document.getElementById("past-life-modal").style.display === 'none' &&
+                      document.getElementById("rules-modal").style.display === 'none' && // Added rules modal check
+                      document.getElementById("pause-menu-modal").style.display !== 'flex' && // Pause menu check
+                      document.getElementById("turn-transition-modal").style.display !== 'block') {
+                      
+                      turnTransitionModalShown = true; // LOCK: Modal is being shown for THIS turn.
+                      showTurnTransitionModal(myPlayerObject);
+                  }
+              }
+          } else if (!isNewTurnForMyClient && !gameState.processingMove && document.getElementById("turn-transition-modal").style.display === 'none') {
+              // My turn, modal already handled (not a new turn start context), and game not processing
+              // Ensure roll button is appropriately enabled (usually by proceedWithTurn or if no modal involved).
+              rollButton.disabled = false; 
+          }
+      } else { // Not my client's turn
+          if (lastPlayerIdForTurnModal === clientId) { // If the turn JUST switched AWAY from my client
+              turnTransitionModalShown = false; // UNLOCK: Reset the flag for the next time it's my turn.
+          }
+          // Show waiting modal for other player, disable my controls
+          document.getElementById("turn-transition-modal").style.display = "none";
+          const waitingModalElement = document.getElementById("waiting-for-player-modal");
+          const waitingMessageElement = document.getElementById("waiting-for-player-message");
+          waitingMessageElement.textContent = `Waiting for ${currentPlayerName || 'next player'}'s turn...`;
+          waitingModalElement.style.display = "block";
+          rollButton.disabled = true;
+          inventoryButton.disabled = false;
+          if (gameState.players[gameState.currentPlayerIndex]) { // Check if player exists before centering
+               centerOnPlayer(gameState.currentPlayerIndex, true);
+          }
       }
+      lastPlayerIdForTurnModal = currentPlayerId; // Store for the next comparison.
     }
   });
 }
