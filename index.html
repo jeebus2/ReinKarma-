@@ -1896,36 +1896,6 @@ Industrial Age\tFuture steam punk gear\t500`;
         const turnTransitionMessage = document.getElementById('turn-transition-message');
         const turnTransitionOkButton = document.getElementById('turn-transition-ok-button');
 
-        // Utility function to determine if it's the client's turn
-async function isCurrentPlayer() {
-  if (!gameId || !clientId) {
-    // console.warn("isCurrentPlayer: gameId or clientId not available.");
-    return false;
-  }
-  try {
-    const snapshot = await firebase.database().ref(`/games/${gameId}/state/currentPlayerId`).once("value");
-    return snapshot.val() === clientId;
-  } catch (error) {
-    console.error("Error checking current player:", error);
-    return false; // Default to false on error
-  }
-}
-
-// Helper function to roll two dice
-        async function isCurrentPlayer() {
-          if (!gameId || !clientId) {
-            // console.warn("isCurrentPlayer: gameId or clientId not available.");
-            return false;
-          }
-          try {
-            const snapshot = await firebase.database().ref(`/games/${gameId}/state/currentPlayerId`).once("value");
-            return snapshot.val() === clientId;
-          } catch (error) {
-            console.error("Error checking current player:", error);
-            return false; // Default to false on error
-          }
-        }
-
         // Helper function to roll two dice
         function rollTwoDice() {
             const die1 = Math.floor(Math.random() * 6) + 1;
@@ -2659,84 +2629,7 @@ async function isCurrentPlayer() {
         }
         
         // Toggle inventory panel logic
-        async function toggleInventory() { // Made async to use await isCurrentPlayer
-            const mainInventoryPanel = document.getElementById('inventory');
-            const selectInventoryModalElement = document.getElementById('select-inventory-modal');
-
-            // Always allow closing modals, regardless of whose turn it is
-            if (mainInventoryPanel.style.display === 'block') {
-                mainInventoryPanel.style.display = 'none';
-                return;
-            }
-            if (selectInventoryModalElement.style.display === 'block') {
-                selectInventoryModalElement.style.display = 'none';
-                return;
-            }
-
-            if (!gameState.players || gameState.players.length === 0) {
-                toast("Game not started or no players available.");
-                return;
-            }
-
-            // Check if this action would lead to opening the *current user's own* inventory directly
-            // (not via the player selection modal)
-            let attemptToOpenOwnInventoryDirectly = false;
-            if (gameState.gameStarted && gameState.players[gameState.currentPlayerIndex]) {
-                const currentPlayerOfTurnObject = gameState.players[gameState.currentPlayerIndex];
-                const humanPlayersInGame = gameState.players.filter(p => p.id && !p.isAI ); // Filter by actual player ID and not AI
-
-                // Case 1: It's this client's turn, and they are human.
-                if (currentPlayerOfTurnObject.id === clientId && !currentPlayerOfTurnObject.isAI) {
-                    attemptToOpenOwnInventoryDirectly = true;
-                }
-                // Case 2: There's only one human player in the game, and it's this client.
-                else if (humanPlayersInGame.length === 1 && humanPlayersInGame[0].id === clientId) {
-                     attemptToOpenOwnInventoryDirectly = true;
-                }
-            }
-
-            if (gameId && attemptToOpenOwnInventoryDirectly) { // Multiplayer mode and intending to open own inventory
-                const canManageOwnInventory = await isCurrentPlayer();
-                if (!canManageOwnInventory) {
-                    toast("Wait for your turn to manage your inventory.");
-                    return;
-                }
-            }
-            // If it's not an attempt to open own inventory directly (e.g., opening select modal, or single player), proceed.
-
-            // --- Existing toggleInventory logic continues below ---
-            const humanPlayers = gameState.players.map((p, index) => ({ ...p, originalIndex: index })).filter(p => !p.isAI);
-
-            if (humanPlayers.length === 0) {
-                toast("No human players to show inventory for.");
-                return;
-            }
-
-            const playerWhoseTurnItIs = gameState.players[gameState.currentPlayerIndex]; 
-
-            // If current turn player is human, show their inventory directly, OR if only one human player exists.
-            if ((playerWhoseTurnItIs && !playerWhoseTurnItIs.isAI && gameState.gameStarted) || humanPlayers.length === 1) {
-                const playerIndexToShow = (playerWhoseTurnItIs && !playerWhoseTurnItIs.isAI) ? gameState.currentPlayerIndex : humanPlayers[0].originalIndex;
-                showPlayerSpecificInventory(playerIndexToShow);
-            } else {
-                // Multiple human players, and it's AI's turn, or game not focused on a single human player's turn context for inventory
-                const playerButtonsContainer = document.getElementById("select-inventory-player-buttons");
-                playerButtonsContainer.innerHTML = ''; // Clear previous buttons
-
-                humanPlayers.forEach(player => {
-                    const btn = document.createElement('button');
-                    btn.textContent = player.name;
-                    btn.style.margin = '5px'; // Ensure buttons have some spacing
-                    btn.onclick = () => {
-                        showPlayerSpecificInventory(player.originalIndex);
-                        selectInventoryModalElement.style.display = 'none';
-                    };
-                    playerButtonsContainer.appendChild(btn);
-                });
-                selectInventoryModalElement.style.display = 'block';
-            }
-        }
-
+        function toggleInventory() {
             const mainInventoryPanel = document.getElementById('inventory');
             const selectInventoryModalElement = document.getElementById('select-inventory-modal');
 
@@ -3731,33 +3624,7 @@ async function isCurrentPlayer() {
         }
 
         // Main function called when human player clicks the roll button
-        async function rollDice() { // Made async to use await isCurrentPlayer
-            if (!gameState.gameStarted) return;
-            if (gameState.processingMove) return; // Prevent multiple rolls during processing
-            
-            if (gameId) { // Multiplayer mode
-                const canPlay = await isCurrentPlayer();
-                if (!canPlay) {
-                    toast("It's not your turn!");
-                    return;
-                }
-                // If canPlay, proceed with existing multiplayer roll logic initiation
-                db.ref(`/games/${gameId}/state/processingMove`).set(true);
-                gameState.processingMove = true; // also update local state
-                continueWithRoll(); // This function contains the rest of the roll logic
-            } else {
-                // Single player mode
-                gameState.processingMove = true;
-                continueWithRoll();
-            }
-            
-            // continueWithRoll function (which is called above) remains unchanged by this specific request.
-            // It contains the actual dice rolling, karmic checks, and move initiation.
-        }
-
-        // Original rollDice function was replaced by the async version incorporating isCurrentPlayer check.
-        // The function proceedWithHumanRoll and continueWithRoll are part of the existing logic flow.
-        /* function rollDice() { removed to avoid duplicate definition after adding async version above */
+        function rollDice() {
             if (!gameState.gameStarted) return;
             if (gameState.processingMove) return; // Prevent multiple rolls during processing
             
@@ -5473,14 +5340,13 @@ document.getElementById("start-game-button").onclick = () => {
       return;
     }
     
-    // Ensure host is first player (player one)
-    const hostId = localStorage.getItem("reinkarma_host_id") || clientId;
-    let orderedPlayerList = [hostId];
-    playerList.forEach(id => {
-      if (id !== hostId) {
-        orderedPlayerList.push(id);
-      }
-    });
+    // Randomly select which player goes first
+    const shuffledPlayerList = [...playerList];
+    for (let i = shuffledPlayerList.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledPlayerList[i], shuffledPlayerList[j]] = [shuffledPlayerList[j], shuffledPlayerList[i]];
+    }
+    const firstPlayerId = shuffledPlayerList[0];
     
     // Assign tokens/colors on game start
     const playerColors = ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#9b59b6"];
@@ -5494,9 +5360,10 @@ document.getElementById("start-game-button").onclick = () => {
     
     const updated = {};
     const gamePlayers = [];
+    const hostId = localStorage.getItem("reinkarma_host_id") || clientId;
     
     // Initialize game state with proper player data
-    orderedPlayerList.forEach((id, i) => {
+    playerList.forEach((id, i) => {
       if (!players[id]) return; // Skip if player doesn't exist
       
       const playerData = {
@@ -5523,11 +5390,14 @@ document.getElementById("start-game-button").onclick = () => {
       gamePlayers.push(playerData);
     });
     
+    // Find the index of the first player in the player list
+    const firstPlayerIndex = playerList.indexOf(firstPlayerId);
+    
     // Initialize full game state
-    updated[`/games/${gameId}/state/currentPlayerId`] = hostId;
+    updated[`/games/${gameId}/state/currentPlayerId`] = firstPlayerId;
     updated[`/games/${gameId}/state/started`] = true;
     updated[`/games/${gameId}/state/gameStartTime`] = firebase.database.ServerValue.TIMESTAMP;
-    updated[`/games/${gameId}/state/currentPlayerIndex`] = 0;
+    updated[`/games/${gameId}/state/currentPlayerIndex`] = firstPlayerIndex;
     updated[`/games/${gameId}/state/gameStarted`] = true;
     updated[`/games/${gameId}/state/processingMove`] = false;
     updated[`/games/${gameId}/state/charityPool`] = 0;
@@ -5554,16 +5424,8 @@ document.getElementById("start-game-button").onclick = () => {
       placePlayerTokens();
       setupEventListeners();
       
-      // Only show turn transition for first player (host) if it's their client
-      if (clientId === hostId) {
-        // Add a delay to prevent double modal display
-        setTimeout(() => {
-          // Check if turn transition modal is already showing
-          if (document.getElementById("turn-transition-modal").style.display !== "block") {
-            showTurnTransitionModal(gamePlayers[0]);
-          }
-        }, 1000);
-      }
+      // The turn transition will be handled by the listenForTurn function
+      // which shows the appropriate modals based on whose turn it is
     });
   });
 };
@@ -5924,29 +5786,32 @@ function listenForTurn() {
       });
       
       // Show turn transition if it's this player's turn and the modal isn't already showing
-      if (currentPlayerId === clientId && document.getElementById("turn-transition-modal").style.display !== "block") {
+      if (currentPlayerId === clientId) {
         // Hide waiting modal if it's showing
         document.getElementById("waiting-for-player-modal").style.display = "none";
         
-        // Enable controls for current player
-        rollButton.disabled = false;
-        inventoryButton.disabled = false;
-        document.getElementById("turn-transition-player-name").innerText = "Your Turn";
-        document.getElementById("turn-transition-message").textContent = "It's your turn!";
-        document.getElementById("turn-transition-modal").style.display = "block";
-        
-        // Center on the current player's token
-        if (myPlayerIndex !== -1) {
-          centerOnPlayer(gameState.currentPlayerIndex, true);
+        // Only show turn transition modal if it's not already showing
+        if (document.getElementById("turn-transition-modal").style.display !== "block") {
+          // Enable controls for current player
+          rollButton.disabled = false;
+          inventoryButton.disabled = false;
+          document.getElementById("turn-transition-player-name").innerText = "Your Turn";
+          document.getElementById("turn-transition-message").textContent = "It's your turn!";
+          document.getElementById("turn-transition-modal").style.display = "block";
+          
+          // Center on the current player's token
+          if (myPlayerIndex !== -1) {
+            centerOnPlayer(gameState.currentPlayerIndex, true);
+          }
+          
+          // Set up the OK button to start the turn
+          document.getElementById("turn-transition-ok-button").onclick = () => {
+            document.getElementById("turn-transition-modal").style.display = "none";
+            document.getElementById("waiting-for-player-modal").style.display = "none"; // Also hide waiting modal
+            proceedWithTurn(gameState.players[gameState.currentPlayerIndex]);
+          };
         }
-        
-        // Set up the OK button to start the turn
-        document.getElementById("turn-transition-ok-button").onclick = () => {
-          document.getElementById("turn-transition-modal").style.display = "none";
-          document.getElementById("waiting-for-player-modal").style.display = "none"; // Also hide waiting modal
-          proceedWithTurn(gameState.players[gameState.currentPlayerIndex]);
-        };
-      } else if (currentPlayerId !== clientId) {
+      } else {
         // It's not this player's turn
         // Hide turn transition modal if it's showing
         document.getElementById("turn-transition-modal").style.display = "none";
