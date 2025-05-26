@@ -5228,25 +5228,20 @@ document.getElementById("join-game-button").onclick = () => {
 };
 
 document.getElementById("start-game-button").onclick = () => {
-  db.ref(`/games/${gameId}/state`).once("value").then(snapshot => {
-    const gameData = snapshot.val();
-    if (!gameData) return;
-    
-    const playerList = Object.keys(gameData.players || {});
+  db.ref(`/games/${gameId}/state/players`).once("value").then(snapshot => {
+    const players = snapshot.val() || {};
+    const playerList = Object.keys(players);
     if (playerList.length < 1) {
       alert("At least one player is required to start.");
       return;
     }
-    
-    // Randomize first player for fairness
-    const randomIndex = Math.floor(Math.random() * playerList.length);
-    const firstId = playerList[randomIndex];
+    const firstId = playerList[0];
     
     // Assign tokens/colors on game start
     const playerColors = ["red", "blue", "green", "purple", "orange"];
     const updated = {};
     
-    Object.keys(gameData.players).forEach((id, i) => {
+    Object.keys(players).forEach((id, i) => {
       updated[`/games/${gameId}/state/players/${id}/token`] = i;
       updated[`/games/${gameId}/state/players/${id}/color`] = playerColors[i];
     });
@@ -5326,46 +5321,7 @@ window.addEventListener("load", async () => {
   }
 });
 
-// ✅ FIX 5: Show 'Waiting for Host to Start' if game not started yet
-const waitingModal = document.createElement("div");
-waitingModal.id = "waiting-modal";
-waitingModal.style.cssText = `
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0, 0, 0, 0.9); color: white; z-index: 10000;
-  display: none; align-items: center; justify-content: center;
-  font-size: 2rem; text-align: center;
-`;
-waitingModal.textContent = "Waiting for host to start the game...";
-document.body.appendChild(waitingModal);
-
-// ✅ FIX 6: In-UI Player Feedback: "You are Player X"
-function showPlayerIdentity() {
-  db.ref(`/games/${gameId}/state/players`).once("value").then(snapshot => {
-    const players = Object.keys(snapshot.val() || {});
-    const playerNumber = players.indexOf(clientId) + 1;
-    const msg = document.createElement("div");
-    msg.id = "player-identity-indicator";
-    msg.style.cssText = `position: fixed; top: 10px; right: 10px; background: black; color: white; padding: 10px; border-radius: 5px; z-index: 9999;`;
-    msg.textContent = `You are Player ${playerNumber}`;
-    document.body.appendChild(msg);
-  });
-}
-
-// ✅ FIX 7: Prevent actions if player is disconnected mid-turn
-function enforceOnlineCheck() {
-  db.ref(`/games/${gameId}/state/currentPlayerId`).on("value", snapshot => {
-    const currentId = snapshot.val();
-    if (currentId === clientId) {
-      db.ref(`.info/connected`).on("value", snap => {
-        if (!snap.val()) {
-          alert("You've lost connection. You will be unable to take your turn.");
-          document.getElementById("roll-button").disabled = true;
-          document.getElementById("inventory-button").disabled = true;
-        }
-      });
-    }
-  });
-}
+// Functions already defined above - removing duplicates
 
 // ✅ FIX 5: Show 'Waiting for Host to Start' if game not started yet
 const waitingModal = document.createElement("div");
@@ -5408,7 +5364,7 @@ function enforceOnlineCheck() {
   });
 }
 
-function reconnectToGame() {
+async function reconnectToGame() {
   if (!gameId || !clientId) return false;
   
   try {
@@ -5436,6 +5392,7 @@ function reconnectToGame() {
       document.getElementById("lobby-screen").style.display = "none";
       listenForTurn();
       restrictEventsToCurrentPlayer();
+      restorePlayerState();
       toast("Reconnected to game in progress");
     } else {
       // Game is in lobby
