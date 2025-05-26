@@ -5377,8 +5377,10 @@ document.getElementById("start-game-button").onclick = () => {
     ];
     
     db.ref().update(updated).then(() => {
-      // Hide lobby screen
+      // Hide lobby screen for all players
       document.getElementById("lobby-screen").style.display = "none";
+      document.getElementById("start-screen").style.display = "none";
+      document.getElementById("game-container").style.display = "flex";
       
       // Initialize the game for all players
       createBoard();
@@ -5667,6 +5669,18 @@ function listenForTurn() {
     
     // Update game state from Firebase
     if (gameData.gameStarted) {
+      // Make sure game container is visible for all players
+      document.getElementById("start-screen").style.display = "none";
+      document.getElementById("lobby-screen").style.display = "none";
+      document.getElementById("game-container").style.display = "flex";
+      
+      // Initialize board if not already done
+      if (gameBoard.children.length === 0) {
+        createBoard();
+        populateAllCardData();
+        setupEventListeners();
+      }
+      
       gameState.gameStarted = true;
       gameState.currentPlayerIndex = gameData.currentPlayerIndex || 0;
       gameState.charityPool = gameData.charityPool || 0;
@@ -5703,14 +5717,21 @@ function listenForTurn() {
       updatePlayerInfo();
       placePlayerTokens();
       
-      // Show turn transition if it's this player's turn
-      if (currentPlayerId === clientId) {
+      // Show turn transition if it's this player's turn and the modal isn't already showing
+      if (currentPlayerId === clientId && document.getElementById("turn-transition-modal").style.display !== "block") {
         // Enable controls for current player
         rollButton.disabled = false;
         inventoryButton.disabled = false;
         document.getElementById("turn-transition-player-name").innerText = "Your Turn";
+        document.getElementById("turn-transition-message").textContent = "It's your turn!";
         document.getElementById("turn-transition-modal").style.display = "block";
-      } else {
+        
+        // Set up the OK button to start the turn
+        document.getElementById("turn-transition-ok-button").onclick = () => {
+          document.getElementById("turn-transition-modal").style.display = "none";
+          proceedWithTurn(gameState.players[gameState.currentPlayerIndex]);
+        };
+      } else if (currentPlayerId !== clientId) {
         // Disable controls for other players
         rollButton.disabled = true;
         inventoryButton.disabled = false; // Allow viewing inventory
