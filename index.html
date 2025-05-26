@@ -985,6 +985,20 @@
         <button id="turn-transition-ok-button">Start Turn</button>
     </div>
     
+    <!-- Waiting for player modal -->
+    <div id="waiting-for-player-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.85); color: white; padding: 25px; z-index: 200; max-width: 80%; width: 400px; text-align: center; border-style: solid; border-width: 30px; border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 40; border-image-repeat: stretch; box-shadow: 0 0 25px rgba(0, 0, 0, 0.6);">
+        <h3 style="margin-top: 0; font-size: 1.8rem; color: #ffd700;">Please Wait</h3>
+        <p id="waiting-for-player-message" style="font-size: 1.2rem; margin-bottom: 25px;">Waiting for Player's turn...</p>
+        <div class="loader" style="margin: 0 auto; border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite;"></div>
+    </div>
+    
+    <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
     <script>
         // Initialize sound effects using Howler.js
@@ -3832,6 +3846,11 @@ Industrial Age\tFuture steam punk gear\t500`;
                         return;
                     }
                     
+                    // Check if modal is already showing to prevent duplicates
+                    if (turnTransitionModal.style.display === 'block') {
+                        return;
+                    }
+                    
                     // This is the current player, show the modal
                     turnTransitionPlayerName.textContent = `Your Turn`;
                     turnTransitionMessage.textContent = "It's your turn!";
@@ -3853,6 +3872,11 @@ Industrial Age\tFuture steam punk gear\t500`;
                 });
             } else {
                 // Single player mode
+                // Check if modal is already showing to prevent duplicates
+                if (turnTransitionModal.style.display === 'block') {
+                    return;
+                }
+                
                 turnTransitionPlayerName.textContent = `${player.name}'s Turn`;
                 turnTransitionMessage.textContent = "It's your turn!";
                 
@@ -5397,10 +5421,14 @@ document.getElementById("start-game-button").onclick = () => {
       placePlayerTokens();
       setupEventListeners();
       
-      // Show turn transition for first player (host)
+      // Only show turn transition for first player (host) if it's their client
       if (clientId === hostId) {
+        // Add a delay to prevent double modal display
         setTimeout(() => {
-          showTurnTransitionModal(gamePlayers[0]);
+          // Check if turn transition modal is already showing
+          if (document.getElementById("turn-transition-modal").style.display !== "block") {
+            showTurnTransitionModal(gamePlayers[0]);
+          }
         }, 1000);
       }
     });
@@ -5591,7 +5619,12 @@ function restrictEventsToCurrentPlayer() {
       }
       
       if (myPlayerIndex !== -1) {
-        showTurnTransitionModal(gameState.players[myPlayerIndex]);
+        // Add a small delay to prevent race conditions with other modal triggers
+        setTimeout(() => {
+          if (document.getElementById("turn-transition-modal").style.display !== "block") {
+            showTurnTransitionModal(gameState.players[myPlayerIndex]);
+          }
+        }, 300);
       }
     }
   });
@@ -5749,8 +5782,19 @@ function listenForTurn() {
       updatePlayerInfo();
       placePlayerTokens();
       
+      // Find the current player's name for the waiting modal
+      let currentPlayerName = "";
+      Object.keys(players).forEach(id => {
+        if (id === currentPlayerId && players[id]) {
+          currentPlayerName = players[id].name;
+        }
+      });
+      
       // Show turn transition if it's this player's turn and the modal isn't already showing
       if (currentPlayerId === clientId && document.getElementById("turn-transition-modal").style.display !== "block") {
+        // Hide waiting modal if it's showing
+        document.getElementById("waiting-for-player-modal").style.display = "none";
+        
         // Enable controls for current player
         rollButton.disabled = false;
         inventoryButton.disabled = false;
@@ -5766,12 +5810,26 @@ function listenForTurn() {
         // Set up the OK button to start the turn
         document.getElementById("turn-transition-ok-button").onclick = () => {
           document.getElementById("turn-transition-modal").style.display = "none";
+          document.getElementById("waiting-for-player-modal").style.display = "none"; // Also hide waiting modal
           proceedWithTurn(gameState.players[gameState.currentPlayerIndex]);
         };
       } else if (currentPlayerId !== clientId) {
+        // It's not this player's turn
+        // Hide turn transition modal if it's showing
+        document.getElementById("turn-transition-modal").style.display = "none";
+        
+        // Show waiting modal with current player's name
+        const waitingModal = document.getElementById("waiting-for-player-modal");
+        const waitingMessage = document.getElementById("waiting-for-player-message");
+        waitingMessage.textContent = `Waiting for ${currentPlayerName}'s turn...`;
+        waitingModal.style.display = "block";
+        
         // Disable controls for other players
         rollButton.disabled = true;
         inventoryButton.disabled = false; // Allow viewing inventory
+        
+        // Center on the current active player's token for all players
+        centerOnPlayer(gameState.currentPlayerIndex, true);
       }
     }
   });
@@ -5816,6 +5874,13 @@ function endTurn() {
     
     // Hide turn transition modal
     document.getElementById("turn-transition-modal").style.display = "none";
+    
+    // Show waiting modal for the player who just ended their turn
+    const nextPlayerName = gameData.players[nextId]?.name || "next player";
+    const waitingModal = document.getElementById("waiting-for-player-modal");
+    const waitingMessage = document.getElementById("waiting-for-player-message");
+    waitingMessage.textContent = `Waiting for ${nextPlayerName}'s turn...`;
+    waitingModal.style.display = "block";
     
     // Disable controls for this player
     rollButton.disabled = true;
