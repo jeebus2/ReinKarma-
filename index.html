@@ -3851,6 +3851,9 @@ Industrial Age\tFuture steam punk gear\t500`;
                         return;
                     }
                     
+                    // Reset processing move flag to ensure player can take their turn
+                    gameState.processingMove = false;
+                    
                     // This is the current player, show the modal
                     turnTransitionPlayerName.textContent = `Your Turn`;
                     turnTransitionMessage.textContent = "It's your turn!";
@@ -3876,6 +3879,9 @@ Industrial Age\tFuture steam punk gear\t500`;
                 if (turnTransitionModal.style.display === 'block') {
                     return;
                 }
+                
+                // Reset processing move flag to ensure player can take their turn
+                gameState.processingMove = false;
                 
                 turnTransitionPlayerName.textContent = `${player.name}'s Turn`;
                 turnTransitionMessage.textContent = "It's your turn!";
@@ -5798,6 +5804,7 @@ function listenForTurn() {
           document.getElementById("turn-transition-player-name").innerText = "Your Turn";
           document.getElementById("turn-transition-message").textContent = "It's your turn!";
           document.getElementById("turn-transition-modal").style.display = "block";
+          document.getElementById("turn-transition-ok-button").disabled = false;
           
           // Center on the current player's token
           if (myPlayerIndex !== -1) {
@@ -5863,11 +5870,15 @@ function endTurn() {
     const nextIndex = (currentIndex + 1) % players.length;
     const nextId = players[nextIndex];
     
+    // Reset processing move flag to ensure next player can take their turn
+    gameState.processingMove = false;
+    
     // Update game state
     db.ref(`/games/${gameId}/state`).update({ 
       currentPlayerId: nextId,
       currentPlayerIndex: nextIndex,
-      turnCount: (gameData.turnCount || 0) + 1
+      turnCount: (gameData.turnCount || 0) + 1,
+      processingMove: false // Ensure this is reset in Firebase too
     });
     
     // Hide turn transition modal
