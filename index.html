@@ -3836,6 +3836,10 @@ Industrial Age\tFuture steam punk gear\t500`;
                     turnTransitionPlayerName.textContent = `Your Turn`;
                     turnTransitionMessage.textContent = "It's your turn!";
                     
+                    // Enable controls for current player
+                    rollButton.disabled = false;
+                    inventoryButton.disabled = false;
+                    
                     // Center camera on the current player
                     centerOnPlayer(gameState.currentPlayerIndex, true);
                     
@@ -3851,6 +3855,10 @@ Industrial Age\tFuture steam punk gear\t500`;
                 // Single player mode
                 turnTransitionPlayerName.textContent = `${player.name}'s Turn`;
                 turnTransitionMessage.textContent = "It's your turn!";
+                
+                // Enable controls for current player
+                rollButton.disabled = false;
+                inventoryButton.disabled = false;
                 
                 // Center camera on the current player
                 centerOnPlayer(gameState.currentPlayerIndex, true);
@@ -5566,6 +5574,26 @@ function restrictEventsToCurrentPlayer() {
     const board = document.getElementById("game-board");
     if (board) board.style.pointerEvents = isMyTurn ? "auto" : "none";
     document.querySelectorAll(".cell").forEach(cell => cell.style.cursor = isMyTurn ? "pointer" : "not-allowed");
+    
+    // Enable or disable controls based on whose turn it is
+    rollButton.disabled = !isMyTurn;
+    inventoryButton.disabled = false; // Always allow viewing inventory
+    
+    // If it's my turn and the turn transition modal isn't showing, show it
+    if (isMyTurn && document.getElementById("turn-transition-modal").style.display !== "block") {
+      // Find my player object
+      let myPlayerIndex = -1;
+      for (let i = 0; i < gameState.players.length; i++) {
+        if (gameState.players[i].id === clientId) {
+          myPlayerIndex = i;
+          break;
+        }
+      }
+      
+      if (myPlayerIndex !== -1) {
+        showTurnTransitionModal(gameState.players[myPlayerIndex]);
+      }
+    }
   });
 }
 
@@ -5689,9 +5717,13 @@ function listenForTurn() {
       
       // Update players array
       gameState.players = [];
-      Object.keys(players).forEach(id => {
+      let myPlayerIndex = -1;
+      Object.keys(players).forEach((id, index) => {
         const player = players[id];
         if (player) {
+          if (id === clientId) {
+            myPlayerIndex = index;
+          }
           gameState.players.push({
             id: id,
             name: player.name,
@@ -5725,6 +5757,11 @@ function listenForTurn() {
         document.getElementById("turn-transition-player-name").innerText = "Your Turn";
         document.getElementById("turn-transition-message").textContent = "It's your turn!";
         document.getElementById("turn-transition-modal").style.display = "block";
+        
+        // Center on the current player's token
+        if (myPlayerIndex !== -1) {
+          centerOnPlayer(gameState.currentPlayerIndex, true);
+        }
         
         // Set up the OK button to start the turn
         document.getElementById("turn-transition-ok-button").onclick = () => {
