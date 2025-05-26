@@ -2654,13 +2654,25 @@ Industrial Age\tFuture steam punk gear\t500`;
                 return;
             }
 
-            const playerWhoseInventory = gameState.players[playerIndexToShow];
-            if (!playerWhoseInventory) {
-                console.error("Player not found for inventory display, index:", playerIndexToShow);
-                inventoryItems.innerHTML = '<p>Error: Player data not found.</p>';
-                return;
+            // Find the current player
+            let currentPlayer = null;
+            if (gameId) {
+                // In multiplayer, find the player with matching ID
+                for (let i = 0; i < gameState.players.length; i++) {
+                    if (gameState.players[i].id === clientId) {
+                        currentPlayer = gameState.players[i];
+                        break;
+                    }
+                }
+                
+                // If we couldn't find the player, use the current index
+                if (!currentPlayer) {
+                    currentPlayer = gameState.players[gameState.currentPlayerIndex];
+                }
+            } else {
+                // Single player mode - use current index
+                currentPlayer = gameState.players[gameState.currentPlayerIndex];
             }
-            inventoryItems.innerHTML = '';
 
             // If current player is human, show their inventory directly.
             // Or if only one human player exists in the game.
@@ -2714,7 +2726,13 @@ Industrial Age\tFuture steam punk gear\t500`;
         
         // Update inventory display
         function updateInventoryDisplay(playerIndexToShow = gameState.currentPlayerIndex) {
-            const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+            const playerWhoseInventory = gameState.players[playerIndexToShow];
+            if (!playerWhoseInventory) {
+                console.error("Player not found for inventory display, index:", playerIndexToShow);
+                inventoryItems.innerHTML = '<p>Error: Player data not found.</p>';
+                return;
+            }
+            
             inventoryItems.innerHTML = '';
             
             // Add player name and credits at the top of inventory
@@ -2727,7 +2745,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             inventoryItems.appendChild(playerInfoElement);
             
             // Display items section if any
-            if (playerWhoseInventory.inventory.length > 0) {
+            if (playerWhoseInventory.inventory && playerWhoseInventory.inventory.length > 0) {
                 const itemsHeader = document.createElement('h4');
                 itemsHeader.textContent = 'Items:';
                 itemsHeader.style.marginBottom = '10px';
@@ -2761,7 +2779,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             treasuresHeader.style.marginBottom = '10px';
             inventoryItems.appendChild(treasuresHeader);
             
-            if (playerWhoseInventory.treasures.length > 0) {
+            if (playerWhoseInventory.treasures && playerWhoseInventory.treasures.length > 0) {
                 // Sort treasures by value (highest first) for better display
                 const sortedTreasures = [...playerWhoseInventory.treasures].sort((a, b) => {
                     const valueA = a.value || 0;
@@ -3476,7 +3494,27 @@ Industrial Age\tFuture steam punk gear\t500`;
         // This function will contain the core dice rolling and movement logic for human players
         function proceedWithHumanRoll() {
             rollButton.disabled = true; // Ensure it's disabled at the start of processing the roll
-            const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+            
+            // Find the current player object
+            let currentPlayer = null;
+            if (gameId) {
+                // In multiplayer, find the player with matching ID
+                for (let i = 0; i < gameState.players.length; i++) {
+                    if (gameState.players[i].id === clientId) {
+                        currentPlayer = gameState.players[i];
+                        gameState.currentPlayerIndex = i; // Ensure index is correct
+                        break;
+                    }
+                }
+                
+                // If we couldn't find the player, use the current index
+                if (!currentPlayer) {
+                    currentPlayer = gameState.players[gameState.currentPlayerIndex];
+                }
+            } else {
+                // Single player mode - use current index
+                currentPlayer = gameState.players[gameState.currentPlayerIndex];
+            }
             
             // Roll the dice
             const diceResult = rollTwoDice();
@@ -3513,6 +3551,9 @@ Industrial Age\tFuture steam punk gear\t500`;
                         if (gameId) {
                             db.ref(`/games/${gameId}/state/players/${clientId}/position`).set(targetPosForMove);
                         }
+                        
+                        // Update local player position immediately to ensure animation works
+                        currentPlayer.position = targetPosForMove;
                         
                         animateMovement(gameState.currentPlayerIndex, oldPosForMove, targetPosForMove, true, () => {
                             currentPlayer.offeredInsuranceThisTurn = false; 
@@ -3555,6 +3596,9 @@ Industrial Age\tFuture steam punk gear\t500`;
                             db.ref(`/games/${gameId}/state/players/${clientId}/position`).set(targetPosForMove);
                         }
                         
+                        // Update local player position immediately to ensure animation works
+                        currentPlayer.position = targetPosForMove;
+                        
                         animateMovement(gameState.currentPlayerIndex, oldPosForMove, targetPosForMove, false, () => {
                             currentPlayer.offeredInsuranceThisTurn = false; 
                             const landedEra = getEraFromPosition(targetPosForMove);
@@ -3594,6 +3638,9 @@ Industrial Age\tFuture steam punk gear\t500`;
             if (gameId) {
                 db.ref(`/games/${gameId}/state/players/${clientId}/position`).set(targetPosForMove);
             }
+            
+            // Update local player position immediately to ensure animation works
+            currentPlayer.position = targetPosForMove;
 
             animateMovement(gameState.currentPlayerIndex, oldPosForMove, targetPosForMove, true, () => {
                 // Callback after animation completes
@@ -3650,7 +3697,26 @@ Industrial Age\tFuture steam punk gear\t500`;
             }
             
             function continueWithRoll() {
-                const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+                // Find the current player object
+                let currentPlayer = null;
+                if (gameId) {
+                    // In multiplayer, find the player with matching ID
+                    for (let i = 0; i < gameState.players.length; i++) {
+                        if (gameState.players[i].id === clientId) {
+                            currentPlayer = gameState.players[i];
+                            gameState.currentPlayerIndex = i; // Ensure index is correct
+                            break;
+                        }
+                    }
+                    
+                    // If we couldn't find the player, use the current index
+                    if (!currentPlayer) {
+                        currentPlayer = gameState.players[gameState.currentPlayerIndex];
+                    }
+                } else {
+                    // Single player mode - use current index
+                    currentPlayer = gameState.players[gameState.currentPlayerIndex];
+                }
                 
                 // Disable roll button
                 rollButton.disabled = true;
@@ -3853,6 +3919,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                     
                     // Reset processing move flag to ensure player can take their turn
                     gameState.processingMove = false;
+                    db.ref(`/games/${gameId}/state/processingMove`).set(false);
                     
                     // This is the current player, show the modal
                     turnTransitionPlayerName.textContent = `Your Turn`;
@@ -3913,27 +3980,49 @@ Industrial Age\tFuture steam punk gear\t500`;
         }
 
         function proceedWithTurn(playerForThisTurn) {
+            // Make sure we have the correct player object with all properties
+            let currentPlayerObj = null;
+            for (let i = 0; i < gameState.players.length; i++) {
+                if (gameId && gameState.players[i].id === clientId) {
+                    currentPlayerObj = gameState.players[i];
+                    break;
+                } else if (!gameId && i === gameState.currentPlayerIndex) {
+                    currentPlayerObj = gameState.players[i];
+                    break;
+                }
+            }
+            
+            // If we couldn't find the player, use the passed player object
+            if (!currentPlayerObj) {
+                currentPlayerObj = playerForThisTurn;
+            }
+            
             // Offer initial insurance if it's their first turn and not yet offered
-            if (!playerForThisTurn.initialInsuranceOffered) {
-                playerForThisTurn.initialInsuranceOffered = true;
+            if (!currentPlayerObj.initialInsuranceOffered) {
+                // Update the flag in Firebase for multiplayer
+                if (gameId) {
+                    db.ref(`/games/${gameId}/state/players/${clientId}/initialInsuranceOffered`).set(true);
+                }
+                currentPlayerObj.initialInsuranceOffered = true;
                 const insuranceCost = 500;
 
                 const startPlayerTurnLogic = () => {
-                    if (playerForThisTurn.skipNextTurn) {
-                        toast(`${playerForThisTurn.name} misses their turn!`);
-                        playerForThisTurn.skipNextTurn = false; // Consume the skip
+                    if (currentPlayerObj.skipNextTurn) {
+                        toast(`${currentPlayerObj.name} misses their turn!`);
+                        currentPlayerObj.skipNextTurn = false; // Consume the skip
+                        if (gameId) {
+                            db.ref(`/games/${gameId}/state/players/${clientId}/skipNextTurn`).set(false);
+                        }
                         setTimeout(() => { nextPlayer(); }, 1500);
                         return;
                     }
                     rollButton.disabled = false;
-                    toast(`It's ${playerForThisTurn.name}'s turn. Roll the dice!`);
+                    toast(`It's ${currentPlayerObj.name}'s turn. Roll the dice!`);
                 };
-
-
 
                 // Human Player Logic for initial insurance
                 showEvent('Initial Insurance Offer',
-                    `Welcome to your first turn, ${playerForThisTurn.name}! Would you like to buy insurance?\n\nIt costs ${insuranceCost} credits and protects against Sudden Death.\n\nYour current credits: ${playerForThisTurn.credits}`);
+                    `Welcome to your first turn, ${currentPlayerObj.name}! Would you like to buy insurance?\n\nIt costs ${insuranceCost} credits and protects against Sudden Death.\n\nYour current credits: ${currentPlayerObj.credits}`);
 
                 const eventButtons = document.getElementById('event-buttons');
                 eventButtons.innerHTML = '';
@@ -3942,15 +4031,24 @@ Industrial Age\tFuture steam punk gear\t500`;
                 yesButton.textContent = 'Yes, Buy Insurance';
                 yesButton.style.marginRight = '10px';
                 yesButton.style.backgroundColor = '#4CAF50';
-                yesButton.disabled = playerForThisTurn.credits < insuranceCost;
+                yesButton.disabled = currentPlayerObj.credits < insuranceCost;
 
                 yesButton.onclick = () => {
-                    if (playerForThisTurn.credits >= insuranceCost) {
-                        playerForThisTurn.credits -= insuranceCost;
-                        playerForThisTurn.hasInsurance = true;
-                        toast(`${playerForThisTurn.name} bought initial insurance!`);
+                    if (currentPlayerObj.credits >= insuranceCost) {
+                        currentPlayerObj.credits -= insuranceCost;
+                        currentPlayerObj.hasInsurance = true;
+                        
+                        // Update in Firebase for multiplayer
+                        if (gameId) {
+                            db.ref(`/games/${gameId}/state/players/${clientId}`).update({
+                                credits: currentPlayerObj.credits,
+                                hasInsurance: true
+                            });
+                        }
+                        
+                        toast(`${currentPlayerObj.name} bought initial insurance!`);
                     } else {
-                        toast(`${playerForThisTurn.name} cannot afford initial insurance.`);
+                        toast(`${currentPlayerObj.name} cannot afford initial insurance.`);
                     }
                     hideEvent();
                     updatePlayerInfo();
@@ -3962,7 +4060,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                 noButton.textContent = 'No, Decline';
                 noButton.style.backgroundColor = '#F44336';
                 noButton.onclick = () => {
-                    toast(`${playerForThisTurn.name} declined initial insurance.`);
+                    toast(`${currentPlayerObj.name} declined initial insurance.`);
                     hideEvent();
                     updatePlayerInfo();
                     startPlayerTurnLogic(); // Proceed with turn logic
@@ -3972,9 +4070,14 @@ Industrial Age\tFuture steam punk gear\t500`;
             }
 
             // Original proceedWithTurn logic (if not first turn or initial insurance already handled)
-            if (playerForThisTurn.skipNextTurn) {
-                toast(`${playerForThisTurn.name} misses their turn!`);
-                playerForThisTurn.skipNextTurn = false; // Consume the skip
+            if (currentPlayerObj.skipNextTurn) {
+                toast(`${currentPlayerObj.name} misses their turn!`);
+                currentPlayerObj.skipNextTurn = false; // Consume the skip
+                
+                // Update in Firebase for multiplayer
+                if (gameId) {
+                    db.ref(`/games/${gameId}/state/players/${clientId}/skipNextTurn`).set(false);
+                }
                 
                 // Automatically advance to the next player after a delay
                 setTimeout(() => {
@@ -3985,7 +4088,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             
             // Human player's turn
             rollButton.disabled = false; // Enable roll button ONLY for the human player whose turn it is.
-            toast(`It's ${playerForThisTurn.name}'s turn. Roll the dice!`);
+            toast(`It's ${currentPlayerObj.name}'s turn. Roll the dice!`);
         }
         
         // End the game and show final scores
@@ -5377,20 +5480,12 @@ document.getElementById("start-game-button").onclick = () => {
     const gamePlayers = [];
     const hostId = localStorage.getItem("reinkarma_host_id") || clientId;
     
-    // Assign player slots based on join order but randomize for game start
-    // This ensures consistent token assignment
+    // Use fixed slot assignments instead of random ones to ensure consistency
     const playerSlots = {};
-    const shuffledIndices = [...Array(playerList.length).keys()];
     
-    // Shuffle the indices for random token assignment
-    for (let i = shuffledIndices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffledIndices[i], shuffledIndices[j]] = [shuffledIndices[j], shuffledIndices[i]];
-    }
-    
-    // Assign slots to players
-    playerList.forEach((id, originalIndex) => {
-      playerSlots[id] = shuffledIndices[originalIndex];
+    // Assign slots to players in order of joining
+    playerList.forEach((id, index) => {
+      playerSlots[id] = index;
     });
     
     // Initialize game state with proper player data
@@ -5416,7 +5511,8 @@ document.getElementById("start-game-button").onclick = () => {
         initialInsuranceOffered: false,
         token: slotIndex,
         slotIndex: slotIndex, // Store the assigned slot for reference
-        isHost: id === hostId
+        isHost: id === hostId,
+        id: id // Store the player's ID for reference
       };
       
       updated[`/games/${gameId}/state/players/${id}`] = {...players[id], ...playerData};
@@ -5859,7 +5955,8 @@ function listenForTurn() {
         document.getElementById("waiting-for-player-modal").style.display = "none";
         
         // Only show turn transition modal if it's not already showing
-        if (document.getElementById("turn-transition-modal").style.display !== "block") {
+        if (document.getElementById("turn-transition-modal").style.display !== "block" && 
+            document.getElementById("event-display").style.display !== "block") {
           // Enable controls for current player
           rollButton.disabled = false;
           inventoryButton.disabled = false;
@@ -5959,6 +6056,13 @@ function endTurn() {
     // Reset processing move flag to ensure next player can take their turn
     gameState.processingMove = false;
     
+    // Hide any open modals before ending turn
+    document.getElementById("turn-transition-modal").style.display = "none";
+    document.getElementById("event-display").style.display = "none";
+    document.getElementById("cell-modal").style.display = "none";
+    document.getElementById("item-modal").style.display = "none";
+    document.getElementById("inventory").style.display = "none";
+    
     // Update game state
     db.ref(`/games/${gameId}/state`).update({ 
       currentPlayerId: nextId,
@@ -5966,9 +6070,6 @@ function endTurn() {
       turnCount: (gameData.turnCount || 0) + 1,
       processingMove: false // Ensure this is reset in Firebase too
     });
-    
-    // Hide turn transition modal
-    document.getElementById("turn-transition-modal").style.display = "none";
     
     // Show waiting modal for the player who just ended their turn
     const nextPlayerName = gameData.players[nextId]?.name || "next player";
