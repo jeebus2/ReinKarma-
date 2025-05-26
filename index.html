@@ -3886,6 +3886,9 @@ Industrial Age\tFuture steam punk gear\t500`;
             centerOnPlayer(gameState.currentPlayerIndex, true);
             updatePlayerInfo(); // Update info to reflect the end of the current player's turn
             
+            // Reset the turn transition modal shown flag for the next player
+            turnTransitionModalShown = false;
+            
             if (gameId) {
                 // Multiplayer: End turn and update Firebase
                 endTurn();
@@ -3902,7 +3905,10 @@ Industrial Age\tFuture steam punk gear\t500`;
             }
         }
 
-        function showTurnTransitionModal(player) {
+        // Track if the turn transition modal has been shown for the current turn
+let turnTransitionModalShown = false;
+
+function showTurnTransitionModal(player) {
             // For multiplayer, check if this is actually the current player's client
             if (gameId) {
                 db.ref(`/games/${gameId}/state/currentPlayerId`).once("value").then(snapshot => {
@@ -3912,8 +3918,8 @@ Industrial Age\tFuture steam punk gear\t500`;
                         return;
                     }
                     
-                    // Check if modal is already showing to prevent duplicates
-                    if (turnTransitionModal.style.display === 'block') {
+                    // Check if modal is already showing or has been shown for this turn to prevent duplicates
+                    if (turnTransitionModal.style.display === 'block' || turnTransitionModalShown) {
                         return;
                     }
                     
@@ -3943,6 +3949,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                     
                     turnTransitionOkButton.onclick = () => {
                         turnTransitionModal.style.display = 'none';
+                        turnTransitionModalShown = true; // Mark that we've shown the modal for this turn
                         proceedWithTurn(player);
                     };
                     
@@ -3951,8 +3958,8 @@ Industrial Age\tFuture steam punk gear\t500`;
                 });
             } else {
                 // Single player mode
-                // Check if modal is already showing to prevent duplicates
-                if (turnTransitionModal.style.display === 'block') {
+                // Check if modal is already showing or has been shown for this turn to prevent duplicates
+                if (turnTransitionModal.style.display === 'block' || turnTransitionModalShown) {
                     return;
                 }
                 
@@ -3971,6 +3978,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                 
                 turnTransitionOkButton.onclick = () => {
                     turnTransitionModal.style.display = 'none';
+                    turnTransitionModalShown = true; // Mark that we've shown the modal for this turn
                     proceedWithTurn(player); 
                 };
                 
@@ -5742,8 +5750,14 @@ function restrictEventsToCurrentPlayer() {
     rollButton.disabled = !isMyTurn || gameState.processingMove;
     inventoryButton.disabled = false; // Always allow viewing inventory
     
-    // Only show turn transition modal on actual turn changes
-    if (isMyTurn && isTurnChange && document.getElementById("turn-transition-modal").style.display !== "block") {
+    // Only show turn transition modal on actual turn changes and if not already shown for this turn
+    if (isMyTurn && isTurnChange && !turnTransitionModalShown && 
+        document.getElementById("turn-transition-modal").style.display !== "block") {
+      // Reset the turn transition modal shown flag when the turn changes
+      if (isTurnChange) {
+        turnTransitionModalShown = false;
+      }
+      
       // Find my player object
       let myPlayerIndex = -1;
       for (let i = 0; i < gameState.players.length; i++) {
@@ -5756,8 +5770,9 @@ function restrictEventsToCurrentPlayer() {
       if (myPlayerIndex !== -1) {
         // Add a small delay to prevent race conditions with other modal triggers
         setTimeout(() => {
-          // Double-check that no other modals are showing
-          if (document.getElementById("turn-transition-modal").style.display !== "block" && 
+          // Double-check that no other modals are showing and the modal hasn't been shown yet
+          if (!turnTransitionModalShown && 
+              document.getElementById("turn-transition-modal").style.display !== "block" && 
               document.getElementById("event-display").style.display !== "block") {
             showTurnTransitionModal(gameState.players[myPlayerIndex]);
           }
@@ -5862,6 +5877,8 @@ document.getElementById("end-game-button").onclick = () => {
 function listenForTurn() {
   // Track the last player ID to detect actual turn changes
   let lastPlayerId = null;
+  // Add a flag to track if the turn modal has been shown for the current turn
+  let turnModalShownForCurrentTurn = false;
   
   db.ref(`/games/${gameId}/state`).on("value", snapshot => {
     const gameData = snapshot.val() || {};
@@ -5968,11 +5985,17 @@ function listenForTurn() {
       const isTurnChange = lastPlayerId !== null && lastPlayerId !== currentPlayerId;
       // First turn of the game
       const isFirstTurn = lastPlayerId === null && currentPlayerId !== null;
+      
+      // Reset the turn modal flag when the turn changes to a different player
+      if (isTurnChange) {
+        turnModalShownForCurrentTurn = false;
+      }
+      
       // Update lastPlayerId for next check
       lastPlayerId = currentPlayerId;
       
-      // Show turn transition only on actual turn changes or first turn
-      if (currentPlayerId === clientId && (isTurnChange || isFirstTurn)) {
+      // Show turn transition only on actual turn changes or first turn, and only if not already shown for this turn
+      if (currentPlayerId === clientId && (isTurnChange || isFirstTurn) && !turnModalShownForCurrentTurn) {
         // Hide waiting modal if it's showing
         document.getElementById("waiting-for-player-modal").style.display = "none";
         
@@ -5996,6 +6019,9 @@ function listenForTurn() {
             document.getElementById("waiting-for-player-modal").style.display = "none"; // Also hide waiting modal
             proceedWithTurn(gameState.players[gameState.currentPlayerIndex]);
           };
+          
+          // Mark that we've shown the modal for this turn
+          turnModalShownForCurrentTurn = true;
         }
       } else if (currentPlayerId === clientId) {
         // It's still this player's turn (not a turn change)
