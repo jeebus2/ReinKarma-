@@ -5916,6 +5916,9 @@ function listenForTurn() {
           inventoryButton.disabled = false;
 
           if (isNewTurnForMyClient && !turnTransitionModalShown) {
+                // Enhanced logging for debugging modal issues
+                // console.log(`[ModalDebug] Check: isMyTurn=${isMyClientTurn}, isNewTurn=${isNewTurnForMyClient}, modalShownFlag=${turnTransitionModalShown}, lastPlayerId=${lastPlayerIdForTurnModal}, currentId=${currentPlayerId}`);
+                // console.log(`[ModalDebug] Other modals: eventDisplay=${document.getElementById("event-display").style.display}, pastLife=${document.getElementById("past-life-modal").style.display}, rules=${document.getElementById("rules-modal").style.display}, pause=${document.getElementById("pause-menu-modal").style.display}, turnTransition=${document.getElementById("turn-transition-modal").style.display}`);
               // This is the critical point: a genuinely new turn has started for this client,
               // and we haven't shown the "Your Turn" modal for this specific turn instance yet.
               const myPlayerObject = gameState.players.find(p => p.id === clientId);
@@ -5924,8 +5927,10 @@ function listenForTurn() {
                   if (document.getElementById("event-display").style.display === 'none' &&
                       document.getElementById("past-life-modal").style.display === 'none' &&
                       document.getElementById("rules-modal").style.display === 'none' && // Added rules modal check
-                      document.getElementById("pause-menu-modal").style.display !== 'flex' && // Pause menu check
-                      document.getElementById("turn-transition-modal").style.display !== 'block') {
+                      document.getElementById("pause-menu-modal").style.display !== 'flex' && 
+                      document.getElementById("turn-transition-modal").style.display !== 'block' && 
+                      (!gameData.turnCount || gameData.turnCount <= Object.keys(players).length ? true : document.getElementById("lobby-screen").style.display === 'none') // For first player, lobby must be gone
+                     ) {
                       
                       turnTransitionModalShown = true; // LOCK: Modal is being shown for THIS turn.
                       showTurnTransitionModal(myPlayerObject);
@@ -5934,10 +5939,11 @@ function listenForTurn() {
           } else if (!isNewTurnForMyClient && !gameState.processingMove && document.getElementById("turn-transition-modal").style.display === 'none') {
               // My turn, modal already handled (not a new turn start context), and game not processing
               // Ensure roll button is appropriately enabled (usually by proceedWithTurn or if no modal involved).
-              rollButton.disabled = false; 
+              rollButton.disabled = gameState.processingMove; // Re-evaluate roll button if it's my turn but not a 'new' turn event
           }
       } else { // Not my client's turn
-          if (lastPlayerIdForTurnModal === clientId) { // If the turn JUST switched AWAY from my client
+          // If it WAS my turn (lastPlayerIdForTurnModal matched my clientId) and now it's not (isMyClientTurn is false)
+          if (lastPlayerIdForTurnModal === clientId && clientId !== null) { // clientId !== null is a safeguard
               turnTransitionModalShown = false; // UNLOCK: Reset the flag for the next time it's my turn.
           }
           // Show waiting modal for other player, disable my controls
