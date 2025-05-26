@@ -5721,19 +5721,29 @@ async function reconnectToGame() {
 </script>
 
 <script>
+// Track the last player ID to detect actual turn changes for event restriction
+let lastRestrictedPlayerId = null;
+
 function restrictEventsToCurrentPlayer() {
   db.ref(`/games/${gameId}/state/currentPlayerId`).on("value", snapshot => {
-    const isMyTurn = snapshot.val() === clientId;
+    const currentPlayerId = snapshot.val();
+    const isMyTurn = currentPlayerId === clientId;
+    const isTurnChange = lastRestrictedPlayerId !== currentPlayerId;
+    
+    // Update for next check
+    lastRestrictedPlayerId = currentPlayerId;
+    
+    // Always update UI controls regardless of turn change
     const board = document.getElementById("game-board");
     if (board) board.style.pointerEvents = isMyTurn ? "auto" : "none";
     document.querySelectorAll(".cell").forEach(cell => cell.style.cursor = isMyTurn ? "pointer" : "not-allowed");
     
     // Enable or disable controls based on whose turn it is
-    rollButton.disabled = !isMyTurn;
+    rollButton.disabled = !isMyTurn || gameState.processingMove;
     inventoryButton.disabled = false; // Always allow viewing inventory
     
-    // If it's my turn and the turn transition modal isn't showing, show it
-    if (isMyTurn && document.getElementById("turn-transition-modal").style.display !== "block") {
+    // Only show turn transition modal on actual turn changes
+    if (isMyTurn && isTurnChange && document.getElementById("turn-transition-modal").style.display !== "block") {
       // Find my player object
       let myPlayerIndex = -1;
       for (let i = 0; i < gameState.players.length; i++) {
@@ -5746,7 +5756,9 @@ function restrictEventsToCurrentPlayer() {
       if (myPlayerIndex !== -1) {
         // Add a small delay to prevent race conditions with other modal triggers
         setTimeout(() => {
-          if (document.getElementById("turn-transition-modal").style.display !== "block") {
+          // Double-check that no other modals are showing
+          if (document.getElementById("turn-transition-modal").style.display !== "block" && 
+              document.getElementById("event-display").style.display !== "block") {
             showTurnTransitionModal(gameState.players[myPlayerIndex]);
           }
         }, 300);
@@ -5848,6 +5860,9 @@ document.getElementById("end-game-button").onclick = () => {
 };
 
 function listenForTurn() {
+  // Track the last player ID to detect actual turn changes
+  let lastPlayerId = null;
+  
   db.ref(`/games/${gameId}/state`).on("value", snapshot => {
     const gameData = snapshot.val() || {};
     const currentPlayerId = gameData.currentPlayerId;
@@ -5949,8 +5964,15 @@ function listenForTurn() {
         gameState.currentPlayerIndex = currentStatePlayerIndex;
       }
       
-      // Show turn transition if it's this player's turn and the modal isn't already showing
-      if (currentPlayerId === clientId) {
+      // Check if this is an actual turn change (different player than before)
+      const isTurnChange = lastPlayerId !== null && lastPlayerId !== currentPlayerId;
+      // First turn of the game
+      const isFirstTurn = lastPlayerId === null && currentPlayerId !== null;
+      // Update lastPlayerId for next check
+      lastPlayerId = currentPlayerId;
+      
+      // Show turn transition only on actual turn changes or first turn
+      if (currentPlayerId === clientId && (isTurnChange || isFirstTurn)) {
         // Hide waiting modal if it's showing
         document.getElementById("waiting-for-player-modal").style.display = "none";
         
@@ -5975,6 +5997,12 @@ function listenForTurn() {
             proceedWithTurn(gameState.players[gameState.currentPlayerIndex]);
           };
         }
+      } else if (currentPlayerId === clientId) {
+        // It's still this player's turn (not a turn change)
+        // Just make sure controls are enabled
+        rollButton.disabled = gameState.processingMove;
+        inventoryButton.disabled = false;
+        document.getElementById("waiting-for-player-modal").style.display = "none";
       } else {
         // It's not this player's turn
         // Hide turn transition modal if it's showing
