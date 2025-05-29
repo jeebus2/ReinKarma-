@@ -1782,49 +1782,46 @@ Industrial Age\tFuture steam punk gear\t500`;
             Object.keys(eraContent).forEach(era => {
                 eraContent[era].treasures = [];
             });
-
-            lines.forEach(line => {
-                const parts = line.split('\t');
-                if (parts.length < 3) { 
-                    console.warn("Skipping malformed treasure card line:", line);
-                    return;
-                }
-
-                const rawEra = parts[0].trim();
-                const title = parts[1].trim();
-                let value = parseInt(parts[2].trim());
-
-                // No longer adding 100 to values over 25 - using exact values from data
-                // if (value > 25) {
-                //     value += 100;
-                // }
-
-                const mappedEra = eraMapping[rawEra];
-                if (mappedEra && eraContent[mappedEra]) {
-                    eraContent[mappedEra].treasures.push({
-                        title: title,
-                        value: value,
-                        description: `${title}. Worth ${value} credits.`
-                    });
-                } else {
-                    console.warn("Unknown era or uninitialized eraContent for treasure card: ", rawEra);
-                }
-            });
-            Object.keys(eraContent).forEach(era => {
-                if (eraContent[era] && eraContent[era].treasures) {
-                    const uniqueTreasures = [];
-                    const seenTitles = new Set();
-                    eraContent[era].treasures.forEach(treasure => {
-                        if (!seenTitles.has(treasure.title)) {
-                            seenTitles.add(treasure.title);
-                            uniqueTreasures.push(treasure);
-                        }
-                    });
-                    eraContent[era].treasures = uniqueTreasures;
-                }
-            });
-             Object.keys(eraContent).forEach(era => shuffleArray(eraContent[era].treasures));
-        }
+            
+            // Map of treasure titles to their image URLs for Dark Ages
+            const darkAgesTreasureImages = {
+                // From previous updates
+                "Dragon’s Breath Candle": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FB87B1C37-1CE0-4B7D-8399-2C2892F0BE87.png?alt=media&token=c0f87779-99bd-4c22-99ac-6746a8820bb0",
+                "Crossbow": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FCDD54B0D-AE8F-43F3-9C15-B458C150FAE0.png?alt=media&token=c4d43005-4a30-44a9-bf97-29b665f16984",
+                "Byzantine Emperor’s Parade Armor": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FBB880C3E-590F-46A3-A15F-0201B5935F66.png?alt=media&token=1423c7db-4188-46f2-927f-69626edabe2b",
+                "Charlemagne’s Horn Chalice": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F45A87BA1-1978-4302-8A2D-5356D412FEF4.png?alt=media&token=f3b89d5c-2029-4ab5-8c81-377fbf6a7be8",
+                "A Privy Seal": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FF3A7BED3-1161-46A9-B559-99F54DDA4512.png?alt=media&token=da18acdb-8ae2-47be-87fe-f256a2e7ce17",
+                "Distillation Techniques": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F031C99A8-9E32-439A-B175-37D5620B407D.png?alt=media&token=6e148a29-2cc0-48da-9dc2-b8432482d358",
+                "Cloak of Avalon Mist": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FAD30B14A-55A3-40A1-9311-0779D283875E.png?alt=media&token=c43b21fc-5be9-49d8-b377-ded3a27df9f1",
+                "Famous Crown of Doom": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FE66E064C-96B7-4BF5-887C-D72E8DDD63C9.png?alt=media&token=a57556d4-c77c-401d-9020-8fe61b15cc46",
+                "Bloodletting Horn": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F135E131B-D68D-4972-9203-6FB56F87D83D.png?alt=media&token=109e9355-928a-432f-9ad5-c52eb59342fb",
+                "Devil Repellent Soup Spoon": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FC546ED01-537C-4B38-9D49-0B90C4DE6414.png?alt=media&token=7a77a888-3447-4e03-90be-ff2ee755f817",
+                "Leper Rattle": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F54DD06FE-F1AA-494D-B146-C137AE641970.png?alt=media&token=e37ac373-bd5f-4191-8ad6-f109efcf330e",
+                "Merlin’s Dragon Bone Staff": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FD15F57B0-6D38-4708-A213-008C41B84583.png?alt=media&token=480e9046-1cc3-4558-b0b3-233de69518ae",
+                "Lancelot’s Shattered Shield": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F52C57C00-D902-4512-9203-9D62A3040D4A.png?alt=media&token=4b2fc577-bd8c-4d54-822d-1ee0c1fd0538",
+                "Gilded Processional Cross with Emerald Core": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FA0F289F4-FD10-4C3F-AD08-830CB44C6DBA.png?alt=media&token=4f82eec8-fd13-402e-af24-24a5bebccb55",
+                "Nimue’s Tear Vial": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F7C6FEC2E-B270-45AE-A8C1-A28E9F405FC7.png?alt=media&token=4fe9eb12-867a-4fc2-88d3-b269a74ec9fc",
+                "Math": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FD2791142-5D0B-4443-837E-6C44B0D4585C.png?alt=media&token=c042ab54-95d5-4d07-8ba2-35bc628ae229",
+                "Morgan le Fay’s Mirror of the Moors": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F9ED2D75E-6010-48EA-99F1-DE5AFCDF81B4.png?alt=media&token=48417d21-1af3-43db-9c1f-63b27c802d48",
+                "Ornate Viking Drinking Horn with Silver Rim": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F56366264-4073-4711-8BA1-BC655EA0CF81.png?alt=media&token=91bcc369-6348-4d9e-883f-42088fad1331",
+                "Guinevere’s Crown of Roses": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F1EE7512B-A166-4554-BCDD-1DF0E3C3023D.png?alt=media&token=958878ae-f21c-4623-b55c-9341f8efa548",
+                "Merovingian Crystal Amulet": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FFFD61376-02BD-4F82-9B07-FB492082F5E0.png?alt=media&token=01afa582-431c-455b-b60d-dbf847e69e87",
+                "Runestone Throne Slab": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F7235CF06-6D3C-4C0E-A9E1-8FA92E607C8A.png?alt=media&token=e4a21a88-f090-4ea0-9d35-5f43498672f9",
+                "Saint’s Bone Soup Stirrer": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FC64EFEE7-B819-49B2-A416-774A916B8E1F.png?alt=media&token=34e0724c-83df-4c0a-b288-aaa0d368e25e",
+                "Papal Ring of Power": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F38F32720-06A9-4642-84BC-B0B736F6E2A2.png?alt=media&token=5337df9c-d608-4200-99c8-bec79832a807",
+                "Reading Stones": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FBF35DC3C-CE44-4D65-853F-B4DC2A941324.png?alt=media&token=b46e396b-d592-4774-9f16-5564a1dea3d5",
+                "Snake Charm Vellum": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F47A36FB8-3584-443E-9E65-8BCEEFD04962.png?alt=media&token=6296f555-2353-4112-84cd-04dd400a6645",
+                "Sinner’s Iron Crown": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FC2F2A766-4752-4B2F-8477-38B201BEC128.png?alt=media&token=d7e4f0f4-c06b-4659-90c3-90cb3556363f",
+                "Rusty Goblet of Mild Ale": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F67096402-0E18-403B-800B-6626E8ED60BD.png?alt=media&token=4f79e8ca-f5bf-4cd1-9b9f-a66ba5d8e6bf",
+                "Soap": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FCD763B62-1FB5-4DA9-9C6B-F993057CD07D.png?alt=media&token=a956be2d-2782-4164-931b-db78e746cbfb",
+                "Plague-Era “Fart Mask”": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F690322B0-87DB-4E1E-A72C-7093B4130698.png?alt=media&token=db6563dd-8faa-4942-aeb7-c14131f36931",
+                "Scroll of Unreadable Latin Memes": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F8DB76991-37D9-42C3-B43E-A983D3ADBE65.png?alt=media&token=cec4fa89-18c3-453b-ab56-6142457a8116",
+                "The Aachen Cathedral Treasury": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FDE06601D-69BD-4804-A01A-9C4DC19D8B09.png?alt=media&token=2a592f12-bae8-44f9-b4c1-3bd55a2d2508",
+                "The Crown of Saint Stephen": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2FEE24DE3D-F68D-4B6F-AF1D-26C1450AC8DC.png?alt=media&token=952dbfe5-5ec9-4cd6-9ad8-695dbe90ed02",
+                "The Royal Chicken": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F90E49157-FA90-4430-B19C-A660D34B75AD.png?alt=media&token=78027dc4-d888-4867-ab66-300c6ac01d59",
+                "The Golden Madonna of Essen": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F4C0C47C1-E02C-4506-8327-C2093DFA101B.png?alt=media&token=eef9bade-9ca2-4f92-9c12-c520816e6221",
+                "The Book of Kells (Illuminated Gospel)": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F1DE03EFD-CED4-4B9F-80B4-B7D95AB3323D.png?alt=media&token=7b266091-87b9-45e5-9d7a-a66b20427ef7",
+                "The Dukes toe nails": "https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.
 
         // Function to populate all card data (Twist and Treasure)
         function populateAllCardData() {
