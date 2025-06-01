@@ -230,7 +230,7 @@
             grid-template-columns: repeat(16, 1fr);
             grid-template-rows: repeat(16, 1fr);
             gap: 6px; /* Slightly reduced gap to allow for larger cells */
-            row-gap: 10px;
+            row-gap: 15px;
             padding: 6px; /* Slightly reduced padding to allow for larger cells */
             overflow: visible;
             transform-origin: center;
@@ -980,6 +980,12 @@
         <button id="next-past-life-button" style="padding: 12px 20px; font-size: 1rem;">Next Player</button>
     </div>
 
+    <div id="read-only-event-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.8); color: white; padding: 20px; z-index: 190; max-width: 75%; width: 350px; border-style: solid; border-width: 20px; border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 30; border-image-repeat: stretch; text-align: center;">
+        <h3 id="read-only-event-title" style="margin-top:0; margin-bottom:10px; font-size: 1.4rem; color: #ffd700;"></h3>
+        <p id="read-only-event-description" style="font-size: 1rem; margin-bottom:15px; max-height: 150px; overflow-y: auto;"></p>
+        <div style="font-size: 0.8rem; color: #bbb; margin-top: 10px;">Viewing active player's event...</div>
+    </div>
+
     <div id="turn-transition-modal">
         <h3 id="turn-transition-player-name"></h3>
         <p id="turn-transition-message">It's your turn!</p>
@@ -987,7 +993,7 @@
     </div>
     
     <!-- Waiting for player modal -->
-    <div id="waiting-for-player-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.85); color: white; padding: 25px; z-index: 200; max-width: 80%; width: 400px; text-align: center; border-style: solid; border-width: 30px; border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee'); border-image-slice: 40; border-image-repeat: stretch; box-shadow: 0 0 25px rgba(0, 0, 0, 0.6);">
+    <div id="waiting-for-player-modal" style="display: none; position: fixed; top: 10px; left: 10px; transform: none; background-color: rgba(30, 30, 30, 0.9); color: white; padding: 12px; z-index: 210; width: auto; max-width: 250px; text-align: left; border-radius: 6px; box-shadow: 0px 3px 10px rgba(0,0,0,0.4);">
         <h3 style="margin-top: 0; font-size: 1.8rem; color: #ffd700;">Please Wait</h3>
         <p id="waiting-for-player-message" style="font-size: 1.2rem; margin-bottom: 25px;">Waiting for Player's turn...</p>
         <div class="loader" style="margin: 0 auto; border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite;"></div>
@@ -1183,7 +1189,7 @@ const darkAgesSquareImageUrls = [
             eraTransitionCells: [46, 89, 137], // End indices of Industrial, Kings, Dark eras
             gameStarted: false,
             processingMove: false,
-            charityPool: 0, // Pool for credits from Sudden Death and Charity squares
+            charityPool: { credits: 0, treasures: [] }, // Pool for credits and treasures
             turnCount: 0, // Track number of turns
             suddenDeathCount: 0, // Track number of Sudden Death squares placed
             // offeredInsuranceThisTurn: false, // This will be a player-specific property
@@ -1196,7 +1202,8 @@ const darkAgesSquareImageUrls = [
             lifetimeCredits: [], // Track lifetime credits for each player
             originalTwistCards: { ancient: [], dark: [], kings: [], industrial: [] },
             twistCardDecks: { ancient: [], dark: [], kings: [], industrial: [] },
-            originalTreasureCards: { ancient: [], dark: [], kings: [], industrial: [] } // For storing parsed treasure cards
+            originalTreasureCards: { ancient: [], dark: [], kings: [], industrial: [] }, // For storing parsed treasure cards
+            treasureDecks: { ancient: [], dark: [], kings: [], industrial: [] } // Live decks for drawing
         };
         
         let pastLifeTextsData = {}; // Initialize globally
@@ -2480,12 +2487,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             // Set up event listeners for player selection buttons
             document.querySelectorAll('.player-count-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
-                    // Start screen music when a player count is selected
-                    if (sounds.startScreen && typeof sounds.startScreen.play === 'function') {
-                        if (!sounds.startScreen.playing()) { // Play only if not already playing
-                            sounds.startScreen.play();
-                        }
-                    }
+                    // Music play removed from here to prevent multiple triggers
                     const playerCount = parseInt(this.getAttribute('data-players'));
                     setupPlayers(playerCount);
                 });
@@ -2917,11 +2919,62 @@ Industrial Age\tFuture steam punk gear\t500`;
         
         // Hide event display
         function hideEvent() {
+            document.getElementById('event-display').style.display = 'none';
+            // If multiplayer and this client is the active player, clear Firebase shared modal
+             if (gameId && gameState.players[gameState.currentPlayerIndex] && gameState.players[gameState.currentPlayerIndex].id === clientId) {
+                db.ref(`/games/${gameId}/state/sharedModalContent`).set({ active: false }); // Or set to null
+            }
+        }
+
+        // Original hideEvent function, renamed, to be called internally if needed
+        function originalHideEvent() {
             eventDisplay.style.display = 'none';
         }
         
         // Show event display
         function showEvent(title, description) {
+            const localEventDisplay = document.getElementById('event-display');
+            const localEventTitle = document.getElementById('event-title');
+            const localEventDescription = document.getElementById('event-description');
+            const localEventButtons = document.getElementById('event-buttons');
+
+            localEventTitle.textContent = title;
+            localEventDescription.innerHTML = description; // Use innerHTML for rich text
+            localEventDisplay.style.display = 'block';
+            
+            // Reset event button (default OK)
+            localEventButtons.innerHTML = '';
+            const okButton = document.createElement('button');
+            okButton.textContent = 'OK';
+            okButton.id = 'event-button'; 
+            okButton.onclick = () => {
+                hideEvent(); // This will now also clear from Firebase if active player
+            }; 
+            localEventButtons.appendChild(okButton);
+
+            // If multiplayer and this client is the active player, update Firebase
+            if (gameId && gameState.players[gameState.currentPlayerIndex] && gameState.players[gameState.currentPlayerIndex].id === clientId) {
+                // Extract button configuration for Firebase
+                // For simplicity, we'll just indicate generic buttons for now if not 'OK'.
+                // A more robust solution would parse the buttons added by specific game logic.
+                const buttonsData = [];
+                const buttonsInModal = localEventButtons.getElementsByTagName('button');
+                for (let i = 0; i < buttonsInModal.length; i++) {
+                    buttonsData.push({ text: buttonsInModal[i].textContent });
+                }
+
+                db.ref(`/games/${gameId}/state/sharedModalContent`).set({
+                    type: 'event',
+                    title: title,
+                    description: description, // Send HTML description
+                    buttons: buttonsData, // Send basic button info
+                    active: true
+                });
+            }
+        }
+
+        // Original showEvent function, renamed, to be called internally if needed
+        function originalShowEvent(title, description) {
             eventTitle.textContent = title;
             eventDescription.innerHTML = description;
             eventDisplay.style.display = 'block';
@@ -3376,6 +3429,10 @@ Industrial Age\tFuture steam punk gear\t500`;
             // Set up event listeners for game controls
             setupEventListeners();
             
+            // Stop start screen music if it's playing before showing the first turn modal for single player
+            if (sounds.startScreen && sounds.startScreen.playing()) {
+                sounds.startScreen.stop();
+            }
             // Start game with the first player's turn sequence after setup.
             // The showTurnTransitionModal will lead to proceedWithTurn,
             // where the initial insurance offer will happen for the first player.
@@ -3394,7 +3451,8 @@ Industrial Age\tFuture steam punk gear\t500`;
             charityDiv.style.backgroundColor = '#795548';
             charityDiv.innerHTML = `
                 <strong>Charity Pool</strong><br>
-                Credits: ${gameState.charityPool}
+                Credits: ${gameState.charityPool.credits}<br>
+                Treasures: ${gameState.charityPool.treasures.length}
             `;
             playerInfo.appendChild(charityDiv);
             
@@ -4120,6 +4178,7 @@ Industrial Age\tFuture steam punk gear\t500`;
         // Track if the turn transition modal has been shown for the current turn
 let turnTransitionModalShown = false;
 let lastPlayerIdForTurnModal = null; // Tracks the Firebase currentPlayerId from the PREVIOUS state update
+let sharedModalContentListener = null; // Listener for shared modal content
 
 function showTurnTransitionModal(player) { // Player object for whom the turn is starting
     // Ensure modal is not already visible (visual safeguard)
@@ -4455,29 +4514,34 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                 // Deduct credits
                                 currentPlayer.credits -= 100;
                                 updatePlayerInfo(); // Update credits display immediately
-                                
-                                // Get a treasure based on era
-                                if (eraContent[cellData.era] && eraContent[cellData.era].treasures.length > 0) {
-                                    const treasureIndex = Math.floor(Math.random() * eraContent[cellData.era].treasures.length);
-                                    let treasure = {...eraContent[cellData.era].treasures[treasureIndex]}; // Create a copy
 
-                                    // Ensure 'value' property is set, parsing from description if needed (as a fallback)
-                                    if (treasure.value === undefined) {
-                                        const pointMatch = treasure.description.match(/Worth (\\d+) points/);
-                                        treasure.value = pointMatch ? parseInt(pointMatch[1]) : 0;
-                                    }
+                                // Get a treasure from the dynamic deck for the current era
+                                const currentEraDeck = gameState.treasureDecks[cellData.era];
+                                if (currentEraDeck && currentEraDeck.length > 0) {
+                                    const treasure = currentEraDeck.shift(); // Draw from the top and remove it
                                     
                                     currentPlayer.treasures.push(treasure);
                                     
                                     // Show the treasure
                                     hideEvent();
                                     toast(`${currentPlayer.name} acquired: ${treasure.title} (Worth ${treasure.value} credits)!`);
+                                    // Update Firebase for multiplayer if applicable
+                                    if (gameId) {
+                                        db.ref(`/games/${gameId}/state/treasureDecks/${cellData.era}`).set(currentEraDeck);
+                                        db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/treasures`).set(currentPlayer.treasures);
+                                        db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
+                                    }
+                                    updatePlayerInfo(); // Update treasures display
                                     setTimeout(() => {
                                         showItemModal(treasure); // showItemModal will handle moving to next player after close
                                     }, 1000);
                                 } else {
                                     hideEvent();
-                                    toast(`${currentPlayer.name} paid 100 credits but found no treasure in the ${cellData.era} era!`);
+                                    toast(`${currentPlayer.name} paid 100 credits but found no treasure in the ${cellData.era} era! The deck is empty.`);
+                                     // Update Firebase for credits in multiplayer if applicable (even if no treasure drawn)
+                                    if (gameId) {
+                                        db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
+                                    }
                                     setTimeout(nextPlayer, 1000);
                                 }
                                 updatePlayerInfo(); // Update treasures display
@@ -4580,8 +4644,12 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             if (amountToPay > 0) {
                                 const actualPayment = Math.min(amountToPay, currentPlayer.credits);
                                 currentPlayer.credits = Math.max(0, currentPlayer.credits - actualPayment);
-                                gameState.charityPool += actualPayment;
+                                gameState.charityPool.credits += actualPayment;
                                 toast(`${currentPlayer.name} paid ${actualPayment} credits. ${actualPayment} credits added to charity pool.`);
+                                if (gameId) {
+                                    db.ref(`/games/${gameId}/state/charityPool/credits`).set(gameState.charityPool.credits);
+                                    db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
+                                }
                             }
                         } else if (card.type === 'Lose a turn') {
                             currentPlayer.skipNextTurn = true;
@@ -4828,11 +4896,21 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                 valueOfTreasuresLost += treasure.value || 0; // All treasures are lost, including Major ones
                             });
 
-                            // Add lost credits and the total value of lost treasures to charity pool
-                            gameState.charityPool = (gameState.charityPool || 0) + creditsLost + valueOfTreasuresLost;
+                            // Add lost credits and treasures to charity pool
+                            gameState.charityPool.credits += creditsLost;
+                            gameState.charityPool.treasures.push(...treasuresLostArray);
 
                             currentPlayer.credits = 0;
                             currentPlayer.treasures = []; // All treasures are lost from player
+                            
+                            // Update Firebase for multiplayer
+                            if (gameId) {
+                                db.ref(`/games/${gameId}/state/players/${currentPlayer.id}`).update({
+                                    credits: 0,
+                                    treasures: []
+                                });
+                                db.ref(`/games/${gameId}/state/charityPool`).set(gameState.charityPool);
+                            }
                             updatePlayerInfo(); // Update state immediately
 
                             const eventMessageBase = `${currentPlayer.name} landed on Sudden Death! Lost ${creditsLost} credits and ${treasuresLostArray.length} treasure(s) (total value ${valueOfTreasuresLost}) to the Charity Pool.`;
@@ -4880,7 +4958,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             }
                             
                             // Disable button if player doesn't have enough credits
-                            if (betAmount > currentPlayer.credits) {
+                            if ( (!betAmount && betAmount !== 0) || betAmount > currentPlayer.credits) { // Added check for betAmount being falsy but not 0
                                 betButton.disabled = true;
                             }
                             
@@ -4903,7 +4981,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                     } else if (diceResult.total < 7) { // Lose on 2-6
                                         const actualLoss = Math.min(betAmount, currentPlayer.credits);
                                         currentPlayer.credits -= actualLoss;
-                                        gameState.charityPool += actualLoss; // Add lost credits to charity pool
+                                        gameState.charityPool.credits += actualLoss; // Add lost credits to new charity pool structure
                                         outcome = `You rolled ${diceResult.die1} and ${diceResult.die2} (total: ${diceResult.total})! You lose ${actualLoss} credits, which are added to the Charity Pool.`;
                                     } else { // Roll is 7, Draw
                                         // No change in credits, bet is effectively returned
@@ -4913,6 +4991,14 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                     // Show outcome in a new event display
                                     showEvent('Gamble Result', `${currentPlayer.name}, you bet ${betAmount} credits.\n\n${outcome}\n\nYour new balance: ${currentPlayer.credits} credits`);
                                     
+                                    // Update Firebase for multiplayer
+                                    if (gameId) {
+                                        db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
+                                        if (diceResult.total < 7) {
+                                            db.ref(`/games/${gameId}/state/charityPool/credits`).set(gameState.charityPool.credits);
+                                        }
+                                    }
+
                                     // Clear previous buttons and add OK button
                                     const gamblingResultButtons = document.getElementById('event-buttons');
                                     gamblingResultButtons.innerHTML = '';
@@ -5218,18 +5304,43 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         
                     case 'Charity':
                         // Collect from charity pool
-                        if (gameState.charityPool > 0) {
-                            const charityAmount = gameState.charityPool;
-                            currentPlayer.credits += charityAmount;
-                            gameState.lifetimeCredits[gameState.currentPlayerIndex] += charityAmount;
-                            gameState.charityPool = 0; // Pool is now 0
-                            updatePlayerInfo(); // Update UI to show new player credits AND zeroed pool
-                            toast(`${currentPlayer.name} collected ${charityAmount} credits from the Charity pool!`);
-                        } else {
-                            // Even if pool is empty, call updatePlayerInfo to ensure UI reflects this state correctly.
-                            updatePlayerInfo(); 
-                            toast(`The Charity pool is empty.`);
+                        let collectedMessage = "The Charity pool is empty.";
+                        let collectedAny = false;
+
+                        if (gameState.charityPool.credits > 0) {
+                            const charityCredits = gameState.charityPool.credits;
+                            currentPlayer.credits += charityCredits;
+                            gameState.lifetimeCredits[gameState.currentPlayerIndex] += charityCredits;
+                            collectedMessage = `${currentPlayer.name} collected ${charityCredits} credits`;
+                            collectedAny = true;
                         }
+
+                        if (gameState.charityPool.treasures.length > 0) {
+                            const numTreasuresCollected = gameState.charityPool.treasures.length;
+                            currentPlayer.treasures.push(...gameState.charityPool.treasures);
+                            if (collectedAny) {
+                                collectedMessage += ` and ${numTreasuresCollected} treasure(s)`;
+                            } else {
+                                collectedMessage = `${currentPlayer.name} collected ${numTreasuresCollected} treasure(s)`;
+                            }
+                            collectedAny = true;
+                        }
+
+                        if (collectedAny) {
+                            collectedMessage += " from the Charity pool!";
+                            gameState.charityPool = { credits: 0, treasures: [] }; // Reset entire pool
+                            // Update Firebase for multiplayer
+                            if (gameId) {
+                                db.ref(`/games/${gameId}/state/charityPool`).set(gameState.charityPool);
+                                db.ref(`/games/${gameId}/state/players/${currentPlayer.id}`).update({
+                                    credits: currentPlayer.credits,
+                                    treasures: currentPlayer.treasures
+                                });
+                            }
+                        }
+                        
+                        updatePlayerInfo(); // Update UI
+                        toast(collectedMessage);
                         setTimeout(nextPlayer, 1000);
                         break;
                         
@@ -5287,22 +5398,28 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                     }
                                     const tradedOutTreasure = currentPlayer.treasures.splice(actualTreasureIndex, 1)[0];
                                     
-                                    // Get a random treasure from the current era
-                                    if (eraContent[cellData.era] && eraContent[cellData.era].treasures.length > 0) {
-                                        const newTreasureIndex = Math.floor(Math.random() * eraContent[cellData.era].treasures.length);
-                                        let newTreasure = {...eraContent[cellData.era].treasures[newTreasureIndex]}; // Create a copy
-
-                                        // Ensure 'value' property is set, parsing from description if needed (as a fallback)
-                                        if (newTreasure.value === undefined) {
-                                            const pointMatch = newTreasure.description.match(/Worth (\\d+) points/);
-                                            newTreasure.value = pointMatch ? parseInt(pointMatch[1]) : 0;
+                                    // Add the traded-out treasure back to the dynamic deck of the current era
+                                    const currentEraDeckForBarter = gameState.treasureDecks[cellData.era];
+                                    if (currentEraDeckForBarter) {
+                                        currentEraDeckForBarter.push(tradedOutTreasure);
+                                        shuffleArray(currentEraDeckForBarter); // Shuffle after adding back
+                                         if (gameId) {
+                                            db.ref(`/games/${gameId}/state/treasureDecks/${cellData.era}`).set(currentEraDeckForBarter);
                                         }
+                                    }
 
+                                    // Get a new random treasure from the dynamic deck of the current era
+                                    if (currentEraDeckForBarter && currentEraDeckForBarter.length > 0) {
+                                        const newTreasure = currentEraDeckForBarter.shift(); // Draw from the top and remove it
                                         currentPlayer.treasures.push(newTreasure);
                                         
                                         // Show the new treasure
                                         hideEvent();
                                         toast(`${currentPlayer.name} traded ${tradedOutTreasure.title} (Worth ${tradedOutTreasure.value || 0}) for ${newTreasure.title} (Worth ${newTreasure.value})!`);
+                                        if (gameId) {
+                                            db.ref(`/games/${gameId}/state/treasureDecks/${cellData.era}`).set(currentEraDeckForBarter);
+                                            db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/treasures`).set(currentPlayer.treasures);
+                                        }
                                         updatePlayerInfo();
                                         sounds.interaction.stop(); // Stop sound on completion
                                         setTimeout(() => {
@@ -5310,7 +5427,10 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                         }, 1000);
                                     } else {
                                         hideEvent();
-                                        toast(`${currentPlayer.name} traded ${tradedOutTreasure.title} but got nothing in return from the ${cellData.era} era!`);
+                                        toast(`${currentPlayer.name} traded ${tradedOutTreasure.title} but got nothing in return from the ${cellData.era} era! The deck is empty.`);
+                                        if (gameId) { // Update player's treasures even if nothing new drawn
+                                            db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/treasures`).set(currentPlayer.treasures);
+                                        }
                                         updatePlayerInfo();
                                         sounds.interaction.stop(); // Stop sound here as well
                                         setTimeout(nextPlayer, 1000);
@@ -5707,6 +5827,12 @@ document.getElementById("start-game-button").onclick = () => {
     updated[`/games/${gameId}/state/turnCount`] = 0;
     updated[`/games/${gameId}/state/suddenDeathCount`] = 0;
     updated[`/games/${gameId}/state/board`] = []; // Will be populated by createBoard
+    // Initialize treasureDecks in Firebase when game starts
+    const initialFirebaseTreasureDecks = {};
+    Object.keys(gameState.treasureDecks).forEach(era => {
+        initialFirebaseTreasureDecks[era] = gameState.treasureDecks[era] ? [...gameState.treasureDecks[era]] : [];
+    });
+    updated[`/games/${gameId}/state/treasureDecks`] = initialFirebaseTreasureDecks;
     updated[`/games/${gameId}/state/playerSlots`] = playerSlots; // Store slot assignments
     updated[`/games/${gameId}/state/karmicLevels`] = [
       "Scum of the earth",
@@ -5727,6 +5853,11 @@ document.getElementById("start-game-button").onclick = () => {
       updatePlayerInfo();
       placePlayerTokens();
       setupEventListeners();
+      
+      // Stop start screen music for multiplayer when the game screen is shown
+      if (sounds.startScreen && sounds.startScreen.playing()) {
+          sounds.startScreen.stop();
+      }
       
       // The turn transition will be handled by the listenForTurn function
       // which shows the appropriate modals based on whose turn it is
@@ -6038,9 +6169,23 @@ function listenForTurn() {
       
       gameState.gameStarted = true;
       gameState.currentPlayerIndex = gameData.currentPlayerIndex || 0;
-      gameState.charityPool = gameData.charityPool || 0;
+      gameState.charityPool = gameData.charityPool || { credits: 0, treasures: [] };
       gameState.turnCount = gameData.turnCount || 0;
       gameState.processingMove = gameData.processingMove || false;
+      // Update treasure decks from Firebase
+      if (gameData.treasureDecks) {
+        Object.keys(gameData.treasureDecks).forEach(era => {
+            gameState.treasureDecks[era] = gameData.treasureDecks[era] ? [...gameData.treasureDecks[era]] : [];
+        });
+      } else if (!gameState.treasureDecks.ancient || gameState.treasureDecks.ancient.length === 0) {
+        // Fallback if treasureDecks somehow not set yet, re-populate from eraContent originals
+        Object.keys(eraContent).forEach(era => {
+            if (eraContent[era] && eraContent[era].treasures) {
+                gameState.treasureDecks[era] = [...eraContent[era].treasures];
+                shuffleArray(gameState.treasureDecks[era]);
+            }
+        });
+      }
       
       // Update players array
       gameState.players = [];
@@ -6092,6 +6237,13 @@ function listenForTurn() {
       // Update UI
       updatePlayerInfo();
       placePlayerTokens();
+      
+      // Stop start screen music if it's playing when the game is confirmed to be started and UI is ready
+      if (gameData.gameStarted && document.getElementById("game-container").style.display === "flex") {
+        if (sounds.startScreen && sounds.startScreen.playing()) {
+            sounds.startScreen.stop();
+        }
+      }
       
       // Find the current player's name for the waiting modal
       let currentPlayerName = "";
@@ -6246,7 +6398,8 @@ function endTurn() {
       currentPlayerId: nextId,
       currentPlayerIndex: nextPlayerStateIndex,
       turnCount: (gameData.turnCount || 0) + 1,
-      processingMove: false // Ensure this is reset in Firebase too
+      processingMove: false, // Ensure this is reset in Firebase too
+      sharedModalContent: { active: false } // Clear shared modal when turn ends
     });
     
     // Show waiting modal for the player who just ended their turn
