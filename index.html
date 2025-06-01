@@ -4180,6 +4180,21 @@ let turnTransitionModalShown = false;
 let lastPlayerIdForTurnModal = null; // Tracks the Firebase currentPlayerId from the PREVIOUS state update
 let sharedModalContentListener = null; // Listener for shared modal content
 
+// Function to display shared modal content for inactive players
+function displaySharedModal(modalData, currentPlayerIdFromState) {
+    const readOnlyModal = document.getElementById('read-only-event-modal');
+    const readOnlyTitle = document.getElementById('read-only-event-title');
+    const readOnlyDescription = document.getElementById('read-only-event-description');
+
+    if (modalData && modalData.active && modalData.type === 'event' && clientId !== currentPlayerIdFromState) {
+        readOnlyTitle.textContent = modalData.title;
+        readOnlyDescription.innerHTML = modalData.description; // Use innerHTML for rich text from Firebase
+        readOnlyModal.style.display = 'block';
+    } else {
+        readOnlyModal.style.display = 'none';
+    }
+}
+
 function showTurnTransitionModal(player) { // Player object for whom the turn is starting
     // Ensure modal is not already visible (visual safeguard)
     if (turnTransitionModal.style.display === 'block') {
@@ -6244,6 +6259,19 @@ function listenForTurn() {
             sounds.startScreen.stop();
         }
       }
+
+      // Listener for shared modal content (event modals for inactive players)
+      if (sharedModalContentListener) {
+        db.ref(`/games/${gameId}/state/sharedModalContent`).off("value", sharedModalContentListener);
+      }
+      sharedModalContentListener = db.ref(`/games/${gameId}/state/sharedModalContent`).on("value", sharedModalSnapshot => {
+        const modalContent = sharedModalSnapshot.val();
+        // We need to know the *actual* current player ID from the main state, not just the one that triggered this listener.
+        db.ref(`/games/${gameId}/state/currentPlayerId`).once("value").then(activePlayerSnapshot => {
+            const activePlayerId = activePlayerSnapshot.val();
+            displaySharedModal(modalContent, activePlayerId);
+        });
+      });
       
       // Find the current player's name for the waiting modal
       let currentPlayerName = "";
