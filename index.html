@@ -230,6 +230,7 @@
             grid-template-columns: repeat(16, 1fr);
             grid-template-rows: repeat(16, 1fr);
             gap: 6px; /* Slightly reduced gap to allow for larger cells */
+            row-gap: 10px;
             padding: 6px; /* Slightly reduced padding to allow for larger cells */
             overflow: visible;
             transform-origin: center;
@@ -1420,55 +1421,35 @@ const darkAgesSquareImageUrls = [
         
         // Generate board path to end at (15,0) (top-right) for Nirvana
         // Path uses top 11 rows (y=0 to y=10), blank squares at bottom (y=11 to y=15)
-function generateBoardPath() {
-    const path = new Array(170); // Path has 170 elements
-    const numCols = 16;
-    const numRows = 11; // Using top 11 rows for the path
+        function generateBoardPath() {
+            const path = new Array(170); // Path has 170 elements
+            const totalSquares = 170;
+            const numCols = 16;
 
-    let currentX = 0;
-    let currentY = 0;
-    let direction = 1; // Start moving right
-    let segmentLength = 0;
-    let maxSegmentLength = 4; // Maximum length of each segment before turning
-    let currentSegment = 0;
+            let currentX = numCols - 1; // Start filling from (15,0) for path[169] (Nirvana)
+            let currentY = 0;           // Start at y=0 (top row)
+            let direction = -1; // Fill this row (y=0) from Right to Left (for the generation process)
+                                // So, player path on y=0 will be L->R, ending at (15,0)
 
-    for (let i = 0; i < 170; i++) {
-        path[i] = { x: currentX, y: currentY };
+            for (let i = totalSquares - 1; i >= 0; i--) { // Iterate from index 169 down to 0
+                path[i] = { x: currentX, y: currentY };
 
-        // Move to next position
-        currentX += direction;
-        segmentLength++;
+                if (i > 0) { // Don't calculate next position if we just placed path[0]
+                    currentX += direction;
 
-        // Check if we need to turn
-        if (segmentLength >= maxSegmentLength || 
-            (direction === 1 && currentX >= numCols - 1) || 
-            (direction === -1 && currentX <= 0)) {
-            // Move down one row
-            currentY++;
-            // Reverse direction
-            direction *= -1;
-            segmentLength = 0;
-            currentSegment++;
-
-            // Adjust maxSegmentLength based on the segment
-            if (currentSegment % 3 === 0) {
-                maxSegmentLength = Math.max(2, maxSegmentLength - 1);
+                    if (direction === -1 && currentX < 0) { // Moved past left edge (e.g., path[154] placed at (0,0), currentX becomes -1)
+                        currentY++; // Move to the next row "down" (for generation process, e.g., y=1)
+                        direction = 1; // Change fill direction to L->R for this new row (y=1)
+                        currentX = 0; // Set X to the leftmost column (0)
+                    } else if (direction === 1 && currentX >= numCols) { // Moved past right edge (e.g., path[138] placed at (15,1), currentX becomes 16)
+                        currentY++; // Move to the next row "down" (e.g., y=2)
+                        direction = -1; // Change fill direction to R->L for this new row (y=2)
+                        currentX = numCols - 1; // Set X to the rightmost column (15)
+                    }
+                }
             }
+            return path;
         }
-
-        // If we've reached the bottom, start moving up
-        if (currentY >= numRows) {
-            currentY = numRows - 1;
-            direction *= -1;
-            currentX += direction;
-        }
-    }
-
-    // Ensure the last position is at (15,0) for Nirvana
-    path[169] = { x: 15, y: 0 };
-
-    return path;
-}
         
         const boardPath = generateBoardPath();
         
