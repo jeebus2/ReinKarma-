@@ -230,7 +230,6 @@
             grid-template-columns: repeat(16, 1fr);
             grid-template-rows: repeat(16, 1fr);
             gap: 6px; /* Slightly reduced gap to allow for larger cells */
-            row-gap: 15px;
             padding: 6px; /* Slightly reduced padding to allow for larger cells */
             overflow: visible;
             transform-origin: center;
@@ -2932,42 +2931,38 @@ Industrial Age\tFuture steam punk gear\t500`;
         }
         
         // Show event display
-        function showEvent(title, description) {
+        function showEvent(title, description, buttonsConfig) {
             const localEventDisplay = document.getElementById('event-display');
             const localEventTitle = document.getElementById('event-title');
             const localEventDescription = document.getElementById('event-description');
             const localEventButtons = document.getElementById('event-buttons');
 
             localEventTitle.textContent = title;
-            localEventDescription.innerHTML = description; // Use innerHTML for rich text
+            localEventDescription.innerHTML = description;
             localEventDisplay.style.display = 'block';
             
-            // Reset event button (default OK)
             localEventButtons.innerHTML = '';
-            const okButton = document.createElement('button');
-            okButton.textContent = 'OK';
-            okButton.id = 'event-button'; 
-            okButton.onclick = () => {
-                hideEvent(); // This will now also clear from Firebase if active player
-            }; 
-            localEventButtons.appendChild(okButton);
 
-            // If multiplayer and this client is the active player, update Firebase
+            const buttonsToDisplay = (!buttonsConfig || buttonsConfig.length === 0) 
+                ? [{ text: 'OK', onclick: () => hideEvent() }] 
+                : buttonsConfig;
+
+            buttonsToDisplay.forEach(config => {
+                const button = document.createElement('button');
+                button.textContent = config.text;
+                if(config.style) Object.assign(button.style, config.style);
+                if(config.disabled) button.disabled = config.disabled;
+                if(config.onclick) button.onclick = config.onclick;
+                localEventButtons.appendChild(button);
+            });
+
             if (gameId && gameState.players[gameState.currentPlayerIndex] && gameState.players[gameState.currentPlayerIndex].id === clientId) {
-                // Extract button configuration for Firebase
-                // For simplicity, we'll just indicate generic buttons for now if not 'OK'.
-                // A more robust solution would parse the buttons added by specific game logic.
-                const buttonsData = [];
-                const buttonsInModal = localEventButtons.getElementsByTagName('button');
-                for (let i = 0; i < buttonsInModal.length; i++) {
-                    buttonsData.push({ text: buttonsInModal[i].textContent });
-                }
-
+                const buttonsData = buttonsToDisplay.map(b => ({ text: b.text }));
                 db.ref(`/games/${gameId}/state/sharedModalContent`).set({
                     type: 'event',
                     title: title,
-                    description: description, // Send HTML description
-                    buttons: buttonsData, // Send basic button info
+                    description: description,
+                    buttons: buttonsData,
                     active: true
                 });
             }
@@ -3287,83 +3282,62 @@ Industrial Age\tFuture steam punk gear\t500`;
             // Check if player has enough combined total to ascend
             if (combinedTotal >= 3000) {
                 // Offer to ascend
-                showEvent('Karmic Ascension', 
-                    `${player.name}, you have reached a combined total of ${combinedTotal} credits and treasure value!\n\n` +
+                const karmicMessage = `${player.name}, you have reached a combined total of ${combinedTotal} credits and treasure value!\n\n` +
                     `Would you like to ascend to the next Karmic Level?\n\n` +
                     `Current level: ${gameState.karmicLevels[player.karmicLevel]}\n` +
                     `Next level: ${gameState.karmicLevels[player.karmicLevel + 1] || "Maximum Level Reached"}\n\n` +
                     `Cost: 3,000 from your combined total\n` +
                     `Current credits: ${player.credits}\n` +
                     `Current treasure value: ${treasureValue}\n` +
-                    `Reward: 3,000 credits banked that cannot be lost`);
-                
-                // Clear previous buttons
-                const eventButtons = document.getElementById('event-buttons');
-                eventButtons.innerHTML = '';
-                
-                // Add Yes button
-                const yesButton = document.createElement('button');
-                yesButton.textContent = 'Yes';
-                yesButton.style.marginRight = '10px';
-                yesButton.style.backgroundColor = '#4CAF50';
-                yesButton.onclick = () => {
-                    if (combinedTotal >= 3000) {
-                        // First use credits
-                        let remaining = 3000;
-                        if (player.credits >= remaining) {
-                            player.credits -= remaining;
-                            remaining = 0;
-                        } else {
-                            remaining -= player.credits;
-                            player.credits = 0;
-                        }
-                        
-                        // If we still need to deduct from treasures
-                        if (remaining > 0) {
-                            // Sort treasures by value (highest first) to optimize removal
-                            player.treasures.sort((a, b) => {
-                                const valueA = a.value || 0;
-                                const valueB = b.value || 0;
-                                return valueB - valueA;
-                            });
-                            
-                            // Remove treasures until we've covered the remaining cost
-                            while (remaining > 0 && player.treasures.length > 0) {
-                                const treasure = player.treasures.shift(); // Remove the first (highest value) treasure
-                                const treasureValue = treasure.value || 0;
-                                remaining -= treasureValue;
+                    `Reward: 3,000 credits banked that cannot be lost`;
+
+                const karmicButtons = [
+                    {
+                        text: 'Yes',
+                        style: { marginRight: '10px', backgroundColor: '#4CAF50' },
+                        onclick: () => {
+                            hideEvent();
+                            if (combinedTotal >= 3000) {
+                                // ... logic to deduct cost and ascend ...
+                                let remaining = 3000;
+                                if (player.credits >= remaining) {
+                                    player.credits -= remaining;
+                                    remaining = 0;
+                                } else {
+                                    remaining -= player.credits;
+                                    player.credits = 0;
+                                }
+                                if (remaining > 0) {
+                                    player.treasures.sort((a, b) => (b.value || 0) - (a.value || 0));
+                                    while (remaining > 0 && player.treasures.length > 0) {
+                                        const treasure = player.treasures.shift();
+                                        remaining -= (treasure.value || 0);
+                                    }
+                                    if (remaining < 0) {
+                                        player.credits += Math.abs(remaining);
+                                    }
+                                }
+                                player.karmicLevel++;
+                                player.bankedPoints += 3000;
+                                toast(`${player.name} ascended to ${gameState.karmicLevels[player.karmicLevel]}!`);
+                                updatePlayerInfo();
+                            } else {
+                                toast(`Not enough combined value to ascend!`);
                             }
-                            
-                            // If we've taken too much value, give some credits back
-                            if (remaining < 0) {
-                                player.credits += Math.abs(remaining);
-                            }
+                            setTimeout(proceedWithHumanRoll, 500);
                         }
-                        
-                        player.karmicLevel++;
-                        player.bankedPoints += 3000;
-                        toast(`${player.name} ascended to ${gameState.karmicLevels[player.karmicLevel]}!`);
-                        hideEvent();
-                        updatePlayerInfo();
-                        setTimeout(proceedWithHumanRoll, 500); // Proceed with the turn
-                    } else {
-                        toast(`Not enough combined value to ascend!`);
-                        hideEvent();
-                        setTimeout(proceedWithHumanRoll, 500); // Still proceed if they somehow clicked yes without enough
+                    },
+                    {
+                        text: 'No',
+                        style: { backgroundColor: '#F44336' },
+                        onclick: () => {
+                            hideEvent();
+                            toast(`${player.name} chose not to ascend.`);
+                            setTimeout(proceedWithHumanRoll, 500);
+                        }
                     }
-                };
-                eventButtons.appendChild(yesButton);
-                
-                // Add No button
-                const noButton = document.createElement('button');
-                noButton.textContent = 'No';
-                noButton.style.backgroundColor = '#F44336';
-                noButton.onclick = () => {
-                    toast(`${player.name} chose not to ascend.`);
-                    hideEvent();
-                    setTimeout(proceedWithHumanRoll, 500); // Proceed with the turn
-                };
-                eventButtons.appendChild(noButton);
+                ];
+                showEvent('Karmic Ascension', karmicMessage, karmicButtons);
                 
                 return true; // Indicates we're handling karmic ascension
             }
@@ -4269,51 +4243,40 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                 };
 
                 // Human Player Logic for initial insurance
-                showEvent('Initial Insurance Offer',
-                    `Welcome to your first turn, ${currentPlayerObj.name}! Would you like to buy insurance?\n\nIt costs ${insuranceCost} credits and protects against Sudden Death.\n\nYour current credits: ${currentPlayerObj.credits}`);
-
-                const eventButtons = document.getElementById('event-buttons');
-                eventButtons.innerHTML = '';
-
-                const yesButton = document.createElement('button');
-                yesButton.textContent = 'Yes, Buy Insurance';
-                yesButton.style.marginRight = '10px';
-                yesButton.style.backgroundColor = '#4CAF50';
-                yesButton.disabled = currentPlayerObj.credits < insuranceCost;
-
-                yesButton.onclick = () => {
-                    if (currentPlayerObj.credits >= insuranceCost) {
-                        currentPlayerObj.credits -= insuranceCost;
-                        currentPlayerObj.hasInsurance = true;
-                        
-                        // Update in Firebase for multiplayer
-                        if (gameId) {
-                            db.ref(`/games/${gameId}/state/players/${clientId}`).update({
-                                credits: currentPlayerObj.credits,
-                                hasInsurance: true
-                            });
+                const initialInsuranceMessage = `Welcome to your first turn, ${currentPlayerObj.name}! Would you like to buy insurance?\n\nIt costs ${insuranceCost} credits and protects against Sudden Death.\n\nYour current credits: ${currentPlayerObj.credits}`;
+                const initialInsuranceButtons = [
+                    {
+                        text: 'Yes, Buy Insurance',
+                        style: { marginRight: '10px', backgroundColor: '#4CAF50' },
+                        disabled: currentPlayerObj.credits < insuranceCost,
+                        onclick: () => {
+                            hideEvent();
+                            if (currentPlayerObj.credits >= insuranceCost) {
+                                currentPlayerObj.credits -= insuranceCost;
+                                currentPlayerObj.hasInsurance = true;
+                                if (gameId) {
+                                    db.ref(`/games/${gameId}/state/players/${clientId}`).update({ credits: currentPlayerObj.credits, hasInsurance: true });
+                                }
+                                toast(`${currentPlayerObj.name} bought initial insurance!`);
+                            } else {
+                                toast(`${currentPlayerObj.name} cannot afford initial insurance.`);
+                            }
+                            updatePlayerInfo();
+                            startPlayerTurnLogic(currentPlayerObj);
                         }
-                        
-                        toast(`${currentPlayerObj.name} bought initial insurance!`);
-                    } else {
-                        toast(`${currentPlayerObj.name} cannot afford initial insurance.`);
+                    },
+                    {
+                        text: 'No, Decline',
+                        style: { backgroundColor: '#F44336' },
+                        onclick: () => {
+                            hideEvent();
+                            toast(`${currentPlayerObj.name} declined initial insurance.`);
+                            updatePlayerInfo();
+                            startPlayerTurnLogic(currentPlayerObj);
+                        }
                     }
-                    hideEvent();
-                    updatePlayerInfo();
-                    startPlayerTurnLogic(currentPlayerObj); // Proceed with turn logic, passing the player object
-                };
-                eventButtons.appendChild(yesButton);
-
-                const noButton = document.createElement('button');
-                noButton.textContent = 'No, Decline';
-                noButton.style.backgroundColor = '#F44336';
-                noButton.onclick = () => {
-                    toast(`${currentPlayerObj.name} declined initial insurance.`);
-                    hideEvent();
-                    updatePlayerInfo();
-                    startPlayerTurnLogic(currentPlayerObj); // Proceed with turn logic, passing the player object
-                };
-                eventButtons.appendChild(noButton);
+                ];
+                showEvent('Initial Insurance Offer', initialInsuranceMessage, initialInsuranceButtons);
                 return; // Human needs to click, then turn proceeds via startPlayerTurnLogic
             }
 
@@ -4412,48 +4375,41 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
 
 
             // Human Player Logic
-            showEvent('Insurance Offer',
-                `${offerReasonMessage}Would you like to buy insurance protection?\n\n` +
+            const insuranceMessage = `${offerReasonMessage}Would you like to buy insurance protection?\n\n` +
                 `Insurance costs ${insuranceCost} credits and protects against Sudden Death.\n\n` +
-                `Your current credits: ${currentPlayer.credits}${currentPlayer.hasInsurance ? '. You are already insured.' : '.'}`);
+                `Your current credits: ${currentPlayer.credits}${currentPlayer.hasInsurance ? '. You are already insured.' : '.'}`;
 
-            const eventButtons = document.getElementById('event-buttons');
-            eventButtons.innerHTML = '';
-
-            const yesButton = document.createElement('button');
-            yesButton.textContent = 'Yes, Buy Insurance';
-            yesButton.style.marginRight = '10px';
-            yesButton.style.backgroundColor = '#4CAF50';
-            yesButton.disabled = currentPlayer.credits < insuranceCost || currentPlayer.hasInsurance;
-            if (currentPlayer.hasInsurance) {
-                yesButton.textContent = "Already Insured"; 
-            }
-
-            yesButton.onclick = () => {
-                if (!currentPlayer.hasInsurance && currentPlayer.credits >= insuranceCost) { 
-                    currentPlayer.credits -= insuranceCost;
-                    currentPlayer.hasInsurance = true;
-                    toast(`${currentPlayer.name} bought insurance!`);
-                } else if (currentPlayer.hasInsurance) {
-                    toast(`${currentPlayer.name} is already insured.`);
-                } else {
-                    toast(`${currentPlayer.name} cannot afford insurance.`);
+            const insuranceButtons = [
+                {
+                    text: currentPlayer.hasInsurance ? 'Already Insured' : 'Yes, Buy Insurance',
+                    style: { marginRight: '10px', backgroundColor: '#4CAF50' },
+                    disabled: currentPlayer.credits < insuranceCost || currentPlayer.hasInsurance,
+                    onclick: () => {
+                        hideEvent();
+                        if (!currentPlayer.hasInsurance && currentPlayer.credits >= insuranceCost) {
+                            currentPlayer.credits -= insuranceCost;
+                            currentPlayer.hasInsurance = true;
+                            toast(`${currentPlayer.name} bought insurance!`);
+                        } else if (currentPlayer.hasInsurance) {
+                            toast(`${currentPlayer.name} is already insured.`);
+                        } else {
+                            toast(`${currentPlayer.name} cannot afford insurance.`);
+                        }
+                        updatePlayerInfo();
+                        if (nextActionCallback) setTimeout(nextActionCallback, 500);
+                    }
+                },
+                {
+                    text: 'No, Decline',
+                    style: { backgroundColor: '#F44336' },
+                    onclick: () => {
+                        hideEvent();
+                        toast(`${currentPlayer.name} declined insurance.`);
+                        if (nextActionCallback) setTimeout(nextActionCallback, 500);
+                    }
                 }
-                hideEvent();
-                updatePlayerInfo(); 
-                if (nextActionCallback) setTimeout(nextActionCallback, 500);
-            };
-            eventButtons.appendChild(yesButton);
-
-            const noButton = document.createElement('button');
-            noButton.textContent = 'No, Decline';
-            noButton.style.backgroundColor = '#F44336';
-            noButton.onclick = () => {
-                toast(`${currentPlayer.name} declined insurance.`);
-                hideEvent();
-                if (nextActionCallback) setTimeout(nextActionCallback, 500);
-            };
-            eventButtons.appendChild(noButton);
+            ];
+            showEvent('Insurance Offer', insuranceMessage, insuranceButtons);
         }
 
 
@@ -4514,68 +4470,43 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         
                         // Pay 200 credits to draw a treasure card
                         if (currentPlayer.credits >= 100) {
-                            showEvent('Treasure Square', 
-                                `${currentPlayer.name}, would you like to pay 100 credits to draw a treasure card?\n\n` +
-                                `Your current credits: ${currentPlayer.credits}`);
-                            
-                            // Clear previous buttons
-                            const treasureButtons = document.getElementById('event-buttons');
-                            treasureButtons.innerHTML = '';
-                            
-                            // Yes button
-                            const yesButton = document.createElement('button');
-                            yesButton.textContent = 'Yes';
-                            yesButton.onclick = () => {
-                                // Deduct credits
-                                currentPlayer.credits -= 100;
-                                updatePlayerInfo(); // Update credits display immediately
-
-                                // Get a treasure from the dynamic deck for the current era
-                                const currentEraDeck = gameState.treasureDecks[cellData.era];
-                                if (currentEraDeck && currentEraDeck.length > 0) {
-                                    const treasure = currentEraDeck.shift(); // Draw from the top and remove it
-                                    
-                                    currentPlayer.treasures.push(treasure);
-                                    
-                                    // Show the treasure
-                                    hideEvent();
-                                    toast(`${currentPlayer.name} acquired: ${treasure.title} (Worth ${treasure.value} credits)!`);
-                                    // Update Firebase for multiplayer if applicable
-                                    if (gameId) {
-                                        db.ref(`/games/${gameId}/state/treasureDecks/${cellData.era}`).set(currentEraDeck);
-                                        db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/treasures`).set(currentPlayer.treasures);
-                                        db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
+                            const treasureMessage = `${currentPlayer.name}, would you like to pay 100 credits to draw a treasure card?\n\nYour current credits: ${currentPlayer.credits}`;
+                            const treasureButtons = [
+                                {
+                                    text: 'Yes',
+                                    onclick: () => {
+                                        hideEvent();
+                                        currentPlayer.credits -= 100;
+                                        const currentEraDeck = gameState.treasureDecks[cellData.era];
+                                        if (currentEraDeck && currentEraDeck.length > 0) {
+                                            const treasure = currentEraDeck.shift();
+                                            currentPlayer.treasures.push(treasure);
+                                            toast(`${currentPlayer.name} acquired: ${treasure.title} (Worth ${treasure.value} credits)!`);
+                                            if (gameId) {
+                                                db.ref(`/games/${gameId}/state/treasureDecks/${cellData.era}`).set(currentEraDeck);
+                                                db.ref(`/games/${gameId}/state/players/${currentPlayer.id}`).update({ treasures: currentPlayer.treasures, credits: currentPlayer.credits });
+                                            }
+                                            updatePlayerInfo();
+                                            setTimeout(() => showItemModal(treasure), 1000);
+                                        } else {
+                                            toast(`${currentPlayer.name} paid 100 credits but found no treasure! The deck is empty.`);
+                                            if (gameId) {
+                                                db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
+                                            }
+                                            setTimeout(nextPlayer, 1000);
+                                        }
                                     }
-                                    updatePlayerInfo(); // Update treasures display
-                                    setTimeout(() => {
-                                        showItemModal(treasure); // showItemModal will handle moving to next player after close
-                                    }, 1000);
-                                } else {
-                                    hideEvent();
-                                    toast(`${currentPlayer.name} paid 100 credits but found no treasure in the ${cellData.era} era! The deck is empty.`);
-                                     // Update Firebase for credits in multiplayer if applicable (even if no treasure drawn)
-                                    if (gameId) {
-                                        db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
+                                },
+                                {
+                                    text: 'No',
+                                    onclick: () => {
+                                        hideEvent();
+                                        toast(`${currentPlayer.name} chose not to buy a treasure.`);
+                                        setTimeout(nextPlayer, 1000);
                                     }
-                                    setTimeout(nextPlayer, 1000);
                                 }
-                                updatePlayerInfo(); // Update treasures display
-                            };
-                            treasureButtons.appendChild(yesButton);
-                            
-                            // No button
-                            const noButton = document.createElement('button');
-                            noButton.textContent = 'No';
-                            noButton.onclick = () => {
-                                // Refund the credits since player declined (if any were pre-deducted by mistake, ensure logic is only one deduction)
-                                // The current logic deducts *after* 'Yes', so no refund is needed here if 'No' is chosen.
-                                // However, if we wanted to pre-deduct and refund, it would be currentPlayer.credits += 100;
-                                updatePlayerInfo(); // Ensure this is called to reflect any state changes if needed
-                                hideEvent();
-                                toast(`${currentPlayer.name} chose not to buy a treasure.`);
-                                setTimeout(nextPlayer, 1000);
-                            };
-                            treasureButtons.appendChild(noButton);
+                            ];
+                            showEvent('Treasure Square', treasureMessage, treasureButtons);
                             
                             return; // Return here as we'll handle next steps after selection
                         } else {
@@ -4606,61 +4537,42 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             break;
                         }
 
-                        showEvent(`${card.originalEra} - Twist of Fate`, card.description);
-
-                        const twistButtons = document.getElementById('event-buttons');
-                        twistButtons.innerHTML = ''; // Clear default 'OK' from showEvent
-
                         if (card.type === 'Roll again') {
+                            hideEvent();
                             toast(`${currentPlayer.name} gets to roll again: ${card.description}`);
-                            // The modal might still be visible briefly, or hideEvent can be called sooner
-                            hideEvent(); 
-                            sounds.twistOfFate.stop(); // Stop the sound before setting up the re-roll
+                            sounds.twistOfFate.stop();
                             setTimeout(() => {
-                                gameState.processingMove = false; // Allow next roll
+                                gameState.processingMove = false;
                                 rollButton.disabled = false;
                                 if (currentPlayer.isAI) {
-                                    setTimeout(handleAITurn, 1000); // AI handles its re-roll
+                                    setTimeout(handleAITurn, 1000);
                                 } else {
                                     toast(`${currentPlayer.name}, it's your turn to roll again!`);
                                 }
-                                // Current player takes another turn, so DO NOT call nextPlayer()
                             }, 1500);
-                            // updatePlayerInfo(); // Only if credits could have changed before this point in a 'Roll Again' card
-                            return; // Critical: exit cell processing for this turn.
+                            return;
                         }
 
-                        // Handle Collect, Pay, Lose a turn
                         if (card.type === 'Collect') {
                             let amountToGain = card.amount;
-                            // Apply Credit Doubler if active
-                            if (currentPlayer.effects.some(effect => effect.name === 'Credit Doubler' && effect.duration > 0)) {
-                                amountToGain *= 2;
-                                toast(`Credit Doubler activated! Gain doubled to ${amountToGain}!`);
-                            }
-                            // Apply Karma Booster if active
-                            if (currentPlayer.effects.some(effect => effect.name === 'Karma Booster' && effect.duration > 0)) {
-                                const boostedAmount = Math.floor(amountToGain * 0.5); // Check if this is cumulative or based on original card.amount
-                                amountToGain += boostedAmount; // Let's assume based on current amountToGain
-                                toast(`Karma Booster activated! Gain increased to ${amountToGain}!`);
-                            }
+                            if (currentPlayer.effects.some(e => e.name === 'Credit Doubler' && e.duration > 0)) { amountToGain *= 2; toast(`Credit Doubler activated!`); }
+                            if (currentPlayer.effects.some(e => e.name === 'Karma Booster' && e.duration > 0)) { amountToGain += Math.floor(amountToGain*0.5); toast(`Karma Booster activated!`); }
                             currentPlayer.credits += amountToGain;
                             gameState.lifetimeCredits[gameState.currentPlayerIndex] += amountToGain;
                             toast(`${currentPlayer.name} collected ${amountToGain} credits.`);
                         } else if (card.type === 'Pay') {
                             let amountToPay = card.amount;
-                            const hasKarmaShield = currentPlayer.effects.findIndex(effect => effect.name === 'Karma Shield' && effect.duration > 0);
-                            if (hasKarmaShield >= 0) {
-                                toast(`${currentPlayer.name}'s Karma Shield protected against losing ${amountToPay} credits!`);
-                                currentPlayer.effects.splice(hasKarmaShield, 1); // Remove the shield
+                            const shieldIndex = currentPlayer.effects.findIndex(e => e.name === 'Karma Shield' && e.duration > 0);
+                            if (shieldIndex >= 0) {
+                                toast(`${currentPlayer.name}'s Karma Shield protected!`);
+                                currentPlayer.effects.splice(shieldIndex, 1);
                                 amountToPay = 0;
                             }
-
                             if (amountToPay > 0) {
                                 const actualPayment = Math.min(amountToPay, currentPlayer.credits);
-                                currentPlayer.credits = Math.max(0, currentPlayer.credits - actualPayment);
+                                currentPlayer.credits -= actualPayment;
                                 gameState.charityPool.credits += actualPayment;
-                                toast(`${currentPlayer.name} paid ${actualPayment} credits. ${actualPayment} credits added to charity pool.`);
+                                toast(`${currentPlayer.name} paid ${actualPayment} credits to charity.`);
                                 if (gameId) {
                                     db.ref(`/games/${gameId}/state/charityPool/credits`).set(gameState.charityPool.credits);
                                     db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
@@ -4668,20 +4580,19 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             }
                         } else if (card.type === 'Lose a turn') {
                             currentPlayer.skipNextTurn = true;
-                            toast(`${currentPlayer.name} loses their next turn: ${card.description}`);
+                            toast(`${currentPlayer.name} loses their next turn.`);
                         }
 
-                        // Add an OK button for Collect, Pay, Lose a turn outcomes
-                        const okButton = document.createElement('button');
-                        okButton.textContent = 'OK';
-                        okButton.onclick = () => {
-                            hideEvent();
-                            updatePlayerInfo();
-                            // Stop twist of fate sound when turn ends
-                            sounds.twistOfFate.stop();
-                            setTimeout(nextPlayer, 1000);
-                        };
-                        twistButtons.appendChild(okButton);
+                        const twistButtons = [{
+                            text: 'OK',
+                            onclick: () => {
+                                hideEvent();
+                                updatePlayerInfo();
+                                sounds.twistOfFate.stop();
+                                setTimeout(nextPlayer, 1000);
+                            }
+                        }];
+                        showEvent(`${card.originalEra} - Twist of Fate`, card.description, twistButtons);
                         break;
                         
                     case 'Robbery':
@@ -4704,61 +4615,43 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                 sounds.interaction.play();
                                 sounds.interaction.volume(1.0);
 
-                                showEvent('Robbery', 
-                                    `${currentPlayer.name}, choose a player to steal a non-major treasure from:`);
-                                
-                                // Create buttons for each player with treasures
-                                const eventButtons = document.getElementById('event-buttons');
-                                eventButtons.innerHTML = '';
-                                
-                                playersWithNonMajorTreasures.forEach((targetPlayer) => {
-                                    const button = document.createElement('button');
+                                const robberyMessage = `${currentPlayer.name}, choose a player to steal a non-major treasure from:`;
+                                const robberyButtons = playersWithNonMajorTreasures.map(targetPlayer => {
                                     const vulnerableTreasureCount = targetPlayer.treasures.filter(t => !t.major).length;
-                                    button.textContent = `${targetPlayer.name} (${vulnerableTreasureCount} vulnerable treasures)`;
-                                    button.onclick = () => {
-                                        const stealableTreasures = targetPlayer.treasures.filter(t => !t.major);
-                                        // No need to check stealableTreasures.length > 0 due to outer filter
+                                    return {
+                                        text: `${targetPlayer.name} (${vulnerableTreasureCount} vulnerable treasures)`,
+                                        onclick: () => {
+                                            hideEvent();
+                                            const stealableTreasures = targetPlayer.treasures.filter(t => !t.major);
+                                            const treasureIndexInStealable = Math.floor(Math.random() * stealableTreasures.length);
+                                            const stolenTreasureDetails = stealableTreasures[treasureIndexInStealable];
+                                            const foundIndex = targetPlayer.treasures.findIndex(t => t.title === stolenTreasureDetails.title && t.value === stolenTreasureDetails.value && !t.major);
 
-                                        const treasureIndexInStealable = Math.floor(Math.random() * stealableTreasures.length);
-                                        const stolenTreasureDetails = stealableTreasures[treasureIndexInStealable];
-
-                                        let foundIndex = -1;
-                                        for(let k=0; k < targetPlayer.treasures.length; k++){
-                                            if(targetPlayer.treasures[k].title === stolenTreasureDetails.title &&
-                                               targetPlayer.treasures[k].value === stolenTreasureDetails.value &&
-                                               !targetPlayer.treasures[k].major){ // ensure it's the correct non-major treasure
-                                                foundIndex = k;
-                                                break;
+                                            if (foundIndex !== -1) {
+                                                const stolenTreasure = targetPlayer.treasures.splice(foundIndex, 1)[0];
+                                                currentPlayer.treasures.push(stolenTreasure);
+                                                toast(`${currentPlayer.name} stole ${stolenTreasure.title} from ${targetPlayer.name}!`);
+                                                setTimeout(() => showItemModal(stolenTreasure), 1000);
+                                            } else {
+                                                toast(`Error stealing from ${targetPlayer.name}.`);
                                             }
+                                            updatePlayerInfo();
+                                            sounds.interaction.stop();
                                         }
-
-                                        if (foundIndex !== -1) {
-                                            const stolenTreasure = targetPlayer.treasures.splice(foundIndex, 1)[0];
-                                            currentPlayer.treasures.push(stolenTreasure);
-                                            toast(`${currentPlayer.name} stole ${stolenTreasure.title} from ${targetPlayer.name}!`);
-                                            setTimeout(() => {
-                                                showItemModal(stolenTreasure);
-                                            }, 1000);
-                                        } else {
-                                            toast(`Error: Could not find the selected treasure to steal from ${targetPlayer.name}.`);
-                                        }
-                                        hideEvent();
-                                        updatePlayerInfo();
-                                        sounds.interaction.stop();
                                     };
-                                    eventButtons.appendChild(button);
                                 });
-                                
-                                // Add skip button
-                                const skipButton = document.createElement('button');
-                                skipButton.textContent = 'Skip';
-                                skipButton.onclick = () => {
-                                    hideEvent();
-                                    toast(`${currentPlayer.name} chose not to rob anyone.`);
-                                    sounds.interaction.stop(); // Stop sound on skip
-                                    setTimeout(nextPlayer, 1000);
-                                };
-                                eventButtons.appendChild(skipButton);
+
+                                robberyButtons.push({
+                                    text: 'Skip',
+                                    onclick: () => {
+                                        hideEvent();
+                                        toast(`${currentPlayer.name} chose not to rob anyone.`);
+                                        sounds.interaction.stop();
+                                        setTimeout(nextPlayer, 1000);
+                                    }
+                                });
+
+                                showEvent('Robbery', robberyMessage, robberyButtons);
                                 
                                 return; // Return here as we'll handle next steps after selection
                             } else {
@@ -4792,43 +4685,33 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             const otherPlayers = gameState.players.filter((p, i) => i !== gameState.currentPlayerIndex);
                             const targetOptions = otherPlayers.map(p => `${p.name} (${p.credits} credits)`).join('\n');
                             
-                            showEvent('Vengeance', 
-                                `${currentPlayer.name}, choose a player to take 200 credits from:\n\n${targetOptions}`);
-                            
-                            // Create buttons for each player
-                            const eventButtons = document.getElementById('event-buttons');
-                            eventButtons.innerHTML = '';
-                            
-                            otherPlayers.forEach((player, idx) => {
-                                const button = document.createElement('button');
-                                button.textContent = player.name;
-                                button.onclick = () => {
+                            const vengeanceMessage = `${currentPlayer.name}, choose a player to take 200 credits from:\n\n${targetOptions}`;
+                            const vengeanceButtons = otherPlayers.map(player => ({
+                                text: player.name,
+                                onclick: () => {
+                                    hideEvent();
                                     const vengeanceAmount = 200;
                                     const actualAmount = Math.min(vengeanceAmount, player.credits);
-                                    player.credits = Math.max(0, player.credits - actualAmount);
+                                    player.credits -= actualAmount;
                                     currentPlayer.credits += actualAmount;
                                     gameState.lifetimeCredits[gameState.currentPlayerIndex] += actualAmount;
                                     toast(`${currentPlayer.name} took ${actualAmount} credits from ${player.name}!`);
-                                    hideEvent();
                                     updatePlayerInfo();
-                                    // Stop interaction sound
                                     sounds.interaction.stop();
                                     setTimeout(nextPlayer, 1000);
-                                };
-                                eventButtons.appendChild(button);
+                                }
+                            }));
+
+                            vengeanceButtons.push({
+                                text: 'Skip',
+                                onclick: () => {
+                                    hideEvent();
+                                    toast(`${currentPlayer.name} chose not to take vengeance.`);
+                                    sounds.interaction.stop();
+                                    setTimeout(nextPlayer, 1000);
+                                }
                             });
-                            
-                            // Add skip button
-                            const skipButton = document.createElement('button');
-                            skipButton.textContent = 'Skip';
-                            skipButton.onclick = () => {
-                                hideEvent();
-                                toast(`${currentPlayer.name} chose not to take vengeance.`);
-                                // Stop interaction sound
-                                sounds.interaction.stop();
-                                setTimeout(nextPlayer, 1000);
-                            };
-                            eventButtons.appendChild(skipButton);
+                            showEvent('Vengeance', vengeanceMessage, vengeanceButtons);
                             
                             return; // Return here as we'll handle next steps after selection
                         } else {
@@ -4842,45 +4725,32 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                     case 'Time Portal':
                         sounds.timePortalEffect.play();
                         // Choose any era to travel to
-                        showEvent('Time Portal',
-                            `${currentPlayer.name}, you've entered a Time Portal! Choose any era to travel to:`);
-
-                        // Set up buttons for choices
-                        const eventButtons = document.getElementById('event-buttons');
-                        eventButtons.innerHTML = '';
-
-                        // Create a button for each era
                         const eraNames = ['Industrial', 'Kings', 'Dark', 'Ancient'];
-                        const titleSquareIndices = [1, 46, 89, 137]; // Indices of Title squares for Industrial, Kings, Dark, Ancient
-
-                        eraNames.forEach((eraName, index) => { // 'index' here is targetEraIndex essentially
-                            const eraButton = document.createElement('button');
-                            eraButton.textContent = eraName;
-                            eraButton.onclick = () => {
-                                const newPosition = titleSquareIndices[index]; // index is the targetEraIndex
+                        const titleSquareIndices = [1, 46, 89, 137];
+                        const timePortalButtons = eraNames.map((eraName, index) => ({
+                            text: eraName,
+                            onclick: () => {
+                                hideEvent();
+                                const newPosition = titleSquareIndices[index];
                                 currentPlayer.position = newPosition;
                                 placePlayerTokens();
                                 toast(`${currentPlayer.name} traveled to the ${eraName} era's Title square!`);
-
-                                hideEvent();
                                 updatePlayerInfo();
+                                gameState.processingMove = false;
+                                processCellEffect();
+                            }
+                        }));
 
-                                // The player has landed on a new square (Title), so process its effect.
-                                gameState.processingMove = false; // Allow processCellEffect to run
-                                processCellEffect(); // This will handle the Title square logic itself
-                            };
-                            eventButtons.appendChild(eraButton);
+                        timePortalButtons.push({
+                            text: 'Stay',
+                            onclick: () => {
+                                hideEvent();
+                                toast(`${currentPlayer.name} chose to stay in the current era.`);
+                                setTimeout(nextPlayer, 1000);
+                            }
                         });
 
-                        // Stay button
-                        const stayButton = document.createElement('button');
-                        stayButton.textContent = 'Stay';
-                        stayButton.onclick = () => {
-                            toast(`${currentPlayer.name} chose to stay in the current era.`);
-                            hideEvent();
-                            setTimeout(nextPlayer, 1000);
-                        };
-                        eventButtons.appendChild(stayButton);
+                        showEvent('Time Portal', `${currentPlayer.name}, you've entered a Time Portal! Choose any era to travel to:`, timePortalButtons);
 
                         return; // Return here as we're handling next steps after selection
                         break;
@@ -4932,114 +4802,67 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             
                             // Human player gets a modal
                             const fullEventMessage = eventMessageBase + '\n\nLand on a Charity square to collect from the pool.';
-                            showEvent('Sudden Death', fullEventMessage); 
-                            const humanOkButton = document.getElementById('event-buttons').firstChild; 
-                            if (humanOkButton) {
-                                humanOkButton.onclick = () => {
+                            const suddenDeathButtons = [{
+                                text: 'OK',
+                                onclick: () => {
                                     hideEvent();
                                     setTimeout(nextPlayer, 1000);
-                                };
-                            }
-                            return; // Crucial: Human interaction needed
+                                }
+                            }];
+                            showEvent('Sudden Death', fullEventMessage, suddenDeathButtons);
+                            return;
                         }
                         break; // End of Sudden Death case
                         
                     case 'Gamble':
                         sounds.gambleSquareEffect.play();
                         // Gambling square - risk credits for bigger reward
-                        showEvent('Gamble', 
-                            `${currentPlayer.name}, you've landed on a Gamble square!\n\n` +
-                            `How much would you like to bet? (Current credits: ${currentPlayer.credits})`);
-                        
-                        // Clear previous buttons
-                        const gamblingButtons = document.getElementById('event-buttons');
-                        gamblingButtons.innerHTML = '';
-                        
-                        // Add betting options
                         const betOptions = [50, 100, 200, 'Half', 'All'];
-                        
-                        betOptions.forEach(option => {
-                            const betButton = document.createElement('button');
+                        const gamblingButtons = betOptions.map(option => {
                             let betAmount = option;
+                            let betText = option.toString();
+                            if (option === 'Half') { betAmount = Math.floor(currentPlayer.credits / 2); betText = `Half (${betAmount})`; }
+                            if (option === 'All') { betAmount = currentPlayer.credits; betText = `All (${betAmount})`; }
                             
-                            if (option === 'Half') {
-                                betAmount = Math.floor(currentPlayer.credits / 2);
-                                betButton.textContent = `Half (${betAmount})`;
-                            } else if (option === 'All') {
-                                betAmount = currentPlayer.credits;
-                                betButton.textContent = `All (${betAmount})`;
-                            } else {
-                                betButton.textContent = option.toString();
-                            }
-                            
-                            // Disable button if player doesn't have enough credits
-                            if ( (!betAmount && betAmount !== 0) || betAmount > currentPlayer.credits) { // Added check for betAmount being falsy but not 0
-                                betButton.disabled = true;
-                            }
-                            
-                            betButton.onclick = () => {
-                                // Hide the betting options first
-                                hideEvent();
-                                
-                                // Roll dice for gambling with animation
-                                const diceResult = rollTwoDice();
-                                animateDiceRoll(diceResult);
-                                
-                                // Wait for dice animation to complete before showing outcome
-                                setTimeout(() => {
-                                    // Determine outcome
-                                    let outcome = '';
-                                    if (diceResult.total > 7) { // Win on 8-12
-                                        currentPlayer.credits += betAmount; // Player profits by betAmount
-                                        gameState.lifetimeCredits[gameState.currentPlayerIndex] += betAmount;
-                                        outcome = `You rolled ${diceResult.die1} and ${diceResult.die2} (total: ${diceResult.total})! You win ${betAmount} credits!`;
-                                    } else if (diceResult.total < 7) { // Lose on 2-6
-                                        const actualLoss = Math.min(betAmount, currentPlayer.credits);
-                                        currentPlayer.credits -= actualLoss;
-                                        gameState.charityPool.credits += actualLoss; // Add lost credits to new charity pool structure
-                                        outcome = `You rolled ${diceResult.die1} and ${diceResult.die2} (total: ${diceResult.total})! You lose ${actualLoss} credits, which are added to the Charity Pool.`;
-                                    } else { // Roll is 7, Draw
-                                        // No change in credits, bet is effectively returned
-                                        outcome = `You rolled ${diceResult.die1} and ${diceResult.die2} (total: ${diceResult.total})! It's a draw! Your bet of ${betAmount} is returned.`;
-                                    }
-                                    
-                                    // Show outcome in a new event display
-                                    showEvent('Gamble Result', `${currentPlayer.name}, you bet ${betAmount} credits.\n\n${outcome}\n\nYour new balance: ${currentPlayer.credits} credits`);
-                                    
-                                    // Update Firebase for multiplayer
-                                    if (gameId) {
-                                        db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
-                                        if (diceResult.total < 7) {
-                                            db.ref(`/games/${gameId}/state/charityPool/credits`).set(gameState.charityPool.credits);
+                            return {
+                                text: betText,
+                                disabled: betAmount > currentPlayer.credits,
+                                onclick: () => {
+                                    hideEvent();
+                                    const diceResult = rollTwoDice();
+                                    animateDiceRoll(diceResult);
+                                    setTimeout(() => {
+                                        let outcome = '';
+                                        if (diceResult.total > 7) {
+                                            currentPlayer.credits += betAmount;
+                                            gameState.lifetimeCredits[gameState.currentPlayerIndex] += betAmount;
+                                            outcome = `Rolled ${diceResult.total}! You win ${betAmount} credits!`;
+                                        } else if (diceResult.total < 7) {
+                                            const actualLoss = Math.min(betAmount, currentPlayer.credits);
+                                            currentPlayer.credits -= actualLoss;
+                                            gameState.charityPool.credits += actualLoss;
+                                            outcome = `Rolled ${diceResult.total}! You lose ${actualLoss} credits to charity.`;
+                                            if(gameId) db.ref(`/games/${gameId}/state/charityPool/credits`).set(gameState.charityPool.credits);
+                                        } else {
+                                            outcome = `Rolled a 7! It's a draw.`;
                                         }
-                                    }
-
-                                    // Clear previous buttons and add OK button
-                                    const gamblingResultButtons = document.getElementById('event-buttons');
-                                    gamblingResultButtons.innerHTML = '';
-                                    const okButton = document.createElement('button');
-                                    okButton.textContent = 'OK';
-                                    okButton.onclick = () => {
-                                        hideEvent();
-                                        updatePlayerInfo();
-                                        setTimeout(nextPlayer, 1000);
-                                    };
-                                    gamblingResultButtons.appendChild(okButton);
-                                }, 2000); // Wait for dice animation to complete
+                                        const resultButtons = [{ text: 'OK', onclick: () => { hideEvent(); updatePlayerInfo(); setTimeout(nextPlayer, 1000); } }];
+                                        showEvent('Gamble Result', `${currentPlayer.name}, you bet ${betAmount}.\n\n${outcome}\n\nNew balance: ${currentPlayer.credits}`, resultButtons);
+                                        if(gameId) db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
+                                    }, 2000);
+                                }
                             };
-                            
-                            gamblingButtons.appendChild(betButton);
                         });
-                        
-                        // Add skip button
-                        const skipButton = document.createElement('button');
-                        skipButton.textContent = 'Skip';
-                        skipButton.onclick = () => {
-                            toast(`${currentPlayer.name} chose not to gamble.`);
-                            hideEvent();
-                            setTimeout(nextPlayer, 1000);
-                        };
-                        gamblingButtons.appendChild(skipButton);
+
+                        gamblingButtons.push({
+                            text: 'Skip',
+                            onclick: () => {
+                                hideEvent();
+                                toast(`${currentPlayer.name} chose not to gamble.`);
+                                setTimeout(nextPlayer, 1000);
+                            }
+                        });
+                        showEvent('Gamble', `${currentPlayer.name}, how much would you like to bet? (Credits: ${currentPlayer.credits})`, gamblingButtons);
                         
                         return; // Return here as we'll handle next steps after selection
                         break;
@@ -5141,72 +4964,46 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         
                     case 'Lucky Day':
                         // Move forward or backward and gain 100 credits
-                        showEvent('Lucky Day', 
-                            `${currentPlayer.name}, it's your lucky day!\n\n` +
-                            `You gain 100 credits and can roll again. You may move forward or backward.`);
-                        
-                        // Add credits
                         currentPlayer.credits += 100;
                         gameState.lifetimeCredits[gameState.currentPlayerIndex] += 100;
-                        updatePlayerInfo(); // Update credits display immediately
-                        
-                        // Clear previous buttons
-                        const luckyButtons = document.getElementById('event-buttons');
-                        luckyButtons.innerHTML = '';
-                        
-                        // Add Roll Again button
-                        const rollAgainButton = document.createElement('button');
-                        rollAgainButton.textContent = 'Roll Again';
-                        rollAgainButton.onclick = () => {
-                            hideEvent();
-                            
-                            // Roll the dice again
-                            const diceResult = rollTwoDice();
-                            animateDiceRoll(diceResult);
-                            toast(`${currentPlayer.name} rolled a ${diceResult.total}`);
-                            
-                            // Ask if they want to move forward or backward after dice animation completes
-                            setTimeout(() => {
-                                showEvent('Lucky Day', 
-                                    `${currentPlayer.name}, you rolled a ${diceResult.total} (${diceResult.die1} and ${diceResult.die2}).\n\n` +
-                                    `Do you want to move forward or backward?`);
-                                
-                                // Create direction buttons
-                                const directionButtons = document.getElementById('event-buttons');
-                                directionButtons.innerHTML = '';
-                                
-                                // Forward button
-                                const forwardButton = document.createElement('button');
-                                forwardButton.textContent = 'Forward';
-                                forwardButton.onclick = () => {
+                        updatePlayerInfo();
+
+                        const luckyDayMessage = `${currentPlayer.name}, it's your lucky day!\n\nYou gain 100 credits and can roll again to move forward or backward.`;
+                        const luckyDayButtons = [
+                            {
+                                text: 'Roll Again',
+                                onclick: () => {
                                     hideEvent();
-                                    const currentPos = currentPlayer.position;
-                                    const newLuckyPos = Math.min(currentPos + diceResult.total, 169); // Max board index is 169
-                                    animateMovement(gameState.currentPlayerIndex, currentPos, newLuckyPos, true, () => {
-                                        placePlayerTokens(); // Ensure final placement
-                                        toast(`${currentPlayer.name} moved forward ${diceResult.total} spaces.`);
-                                        processCellEffect(); // Process the new cell
-                                    });
-                                };
-                                directionButtons.appendChild(forwardButton);
-                                
-                                // Backward button
-                                const backwardButton = document.createElement('button');
-                                backwardButton.textContent = 'Backward';
-                                backwardButton.onclick = () => {
-                                    hideEvent();
-                                    const currentPos = currentPlayer.position;
-                                    const newLuckyPosBack = Math.max(currentPos - diceResult.total, 0);
-                                    animateMovement(gameState.currentPlayerIndex, currentPos, newLuckyPosBack, false, () => {
-                                        placePlayerTokens(); // Ensure final placement
-                                        toast(`${currentPlayer.name} moved backward ${diceResult.total} spaces.`);
-                                        processCellEffect(); // Process the new cell
-                                    });
-                                };
-                                directionButtons.appendChild(backwardButton);
-                            }, 2000); // Wait for dice animation to complete
-                        };
-                        luckyButtons.appendChild(rollAgainButton);
+                                    const diceResult = rollTwoDice();
+                                    animateDiceRoll(diceResult);
+                                    toast(`${currentPlayer.name} rolled a ${diceResult.total}`);
+                                    
+                                    setTimeout(() => {
+                                        const directionMessage = `${currentPlayer.name}, you rolled ${diceResult.total}. Move forward or backward?`;
+                                        const directionButtons = [
+                                            {
+                                                text: 'Forward',
+                                                onclick: () => {
+                                                    hideEvent();
+                                                    const newPos = Math.min(currentPlayer.position + diceResult.total, 169);
+                                                    animateMovement(gameState.currentPlayerIndex, currentPlayer.position, newPos, true, () => { processCellEffect(); });
+                                                }
+                                            },
+                                            {
+                                                text: 'Backward',
+                                                onclick: () => {
+                                                    hideEvent();
+                                                    const newPos = Math.max(currentPlayer.position - diceResult.total, 0);
+                                                    animateMovement(gameState.currentPlayerIndex, currentPlayer.position, newPos, false, () => { processCellEffect(); });
+                                                }
+                                            }
+                                        ];
+                                        showEvent('Lucky Day', directionMessage, directionButtons);
+                                    }, 2000);
+                                }
+                            }
+                        ];
+                        showEvent('Lucky Day', luckyDayMessage, luckyDayButtons);
                         return;
                         break;
                         
@@ -5222,89 +5019,47 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                 i !== gameState.currentPlayerIndex && p.treasures.length > 0);
                             
                             if (playersWithAnyTreasures.length > 0) {
-                                showEvent('Evil Eye', 
-                                    `${currentPlayer.name}, choose a player to duel for a treasure:`);
-                                
-                                // Create buttons for each player with treasures
-                                const eventButtons = document.getElementById('event-buttons');
-                                eventButtons.innerHTML = '';
-                                
-                                playersWithAnyTreasures.forEach((targetPlayer) => {
-                                    const button = document.createElement('button');
-                                    const vulnerableTreasureCount = targetPlayer.treasures.filter(t => !t.major).length;
-                                    const totalTreasureCount = targetPlayer.treasures.length;
-                                    button.textContent = `${targetPlayer.name} (${vulnerableTreasureCount} vulnerable / ${totalTreasureCount} total treasures)`;
-                                    button.onclick = () => {
-                                        // Roll for duel
-                                        const playerRoll = rollTwoDice();
-                                        const opponentRoll = rollTwoDice();
-                                        
-                                        let result = `${currentPlayer.name} rolled ${playerRoll}, ${player.name} rolled ${opponentRoll}.\n\n`;
-                                        
-                                        if (playerRoll > opponentRoll) {
-                                            // Current player wins
-                                            // Only steal non-major treasures
-                                            const stealableTreasures = player.treasures.filter(t => !t.major);
-                                            if (stealableTreasures.length === 0) {
-                                                result += `${player.name} has no stealable treasures!`;
-                                            } else {
-                                                const treasureIndex = Math.floor(Math.random() * stealableTreasures.length);
-                                                const stolenTreasureDetails = stealableTreasures[treasureIndex];
-                                                
-                                                // Find this treasure in the player's actual inventory
-                                                let foundIndex = -1;
-                                                for(let k=0; k < player.treasures.length; k++){
-                                                    if(player.treasures[k].title === stolenTreasureDetails.title &&
-                                                       player.treasures[k].value === stolenTreasureDetails.value &&
-                                                       !player.treasures[k].major){
-                                                        foundIndex = k;
-                                                        break;
-                                                    }
-                                                }
-                                                
-                                                if (foundIndex !== -1) {
-                                                    const stolenTreasure = player.treasures.splice(foundIndex, 1)[0];
-                                                    currentPlayer.treasures.push(stolenTreasure);
-                                                    result += `${currentPlayer.name} wins and takes ${stolenTreasure.title} from ${player.name}!`;
-                                                } else {
-                                                    result += `Error: Could not find the selected treasure to steal.`;
-                                                }
-                                            }
-                                            const stolenTreasure = player.treasures.splice(treasureIndex, 1)[0];
-                                            currentPlayer.treasures.push(stolenTreasure);
-                                            
-                                            result += `${currentPlayer.name} wins and takes ${stolenTreasure.title} from ${player.name}!`;
-                                        } else {
-                                            // Opponent wins or tie (defender wins ties)
-                                            result += `${player.name} wins and keeps their treasure!`;
-                                        }
-                                        
-                                        // Show result
-                                        eventDescription.innerHTML = result;
-                                        
-                                        // Clear buttons and add OK button
-                                        eventButtons.innerHTML = '';
-                                        const okButton = document.createElement('button');
-                                        okButton.textContent = 'OK';
-                                        okButton.onclick = () => {
+                                const evilEyeMessage = `${currentPlayer.name}, choose a player to duel for a treasure:`;
+                                const evilEyeButtons = playersWithAnyTreasures.map(targetPlayer => {
+                                    const vulnerableCount = targetPlayer.treasures.filter(t => !t.major).length;
+                                    return {
+                                        text: `${targetPlayer.name} (${vulnerableCount} vulnerable)`,
+                                        onclick: () => {
                                             hideEvent();
-                                            updatePlayerInfo();
-                                            setTimeout(nextPlayer, 1000);
-                                        };
-                                        eventButtons.appendChild(okButton);
+                                            const playerRoll = rollTwoDice().total;
+                                            const opponentRoll = rollTwoDice().total;
+                                            let result = `${currentPlayer.name} rolled ${playerRoll}, ${targetPlayer.name} rolled ${opponentRoll}.\n\n`;
+
+                                            if (playerRoll > opponentRoll) {
+                                                const stealable = targetPlayer.treasures.filter(t => !t.major);
+                                                if (stealable.length > 0) {
+                                                    const stolenIndex = Math.floor(Math.random() * stealable.length);
+                                                    const stolenDetails = stealable[stolenIndex];
+                                                    const actualIndex = targetPlayer.treasures.findIndex(t => t.title === stolenDetails.title && !t.major);
+                                                    const stolenTreasure = targetPlayer.treasures.splice(actualIndex, 1)[0];
+                                                    currentPlayer.treasures.push(stolenTreasure);
+                                                    result += `${currentPlayer.name} wins and takes ${stolenTreasure.title}!`;
+                                                } else {
+                                                    result += `${targetPlayer.name} has no stealable treasures!`;
+                                                }
+                                            } else {
+                                                result += `${targetPlayer.name} wins the duel and keeps their treasure!`;
+                                            }
+                                            const resultButtons = [{ text: 'OK', onclick: () => { hideEvent(); updatePlayerInfo(); setTimeout(nextPlayer, 1000); } }];
+                                            showEvent('Duel Result', result, resultButtons);
+                                        }
                                     };
-                                    eventButtons.appendChild(button);
                                 });
-                                
-                                // Add skip button
-                                const skipButton = document.createElement('button');
-                                skipButton.textContent = 'Skip';
-                                skipButton.onclick = () => {
-                                    hideEvent();
-                                    toast(`${currentPlayer.name} chose not to duel anyone.`);
-                                    setTimeout(nextPlayer, 1000);
-                                };
-                                eventButtons.appendChild(skipButton);
+
+                                evilEyeButtons.push({
+                                    text: 'Skip',
+                                    onclick: () => {
+                                        hideEvent();
+                                        toast(`${currentPlayer.name} chose not to duel.`);
+                                        setTimeout(nextPlayer, 1000);
+                                    }
+                                });
+                                showEvent('Evil Eye', evilEyeMessage, evilEyeButtons);
                                 
                                 return; // Return here as we'll handle next steps after selection
                             } else {
@@ -5392,78 +5147,51 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             sounds.interaction.play();
                             sounds.interaction.volume(1.0);
 
-                            showEvent('Barter', 
-                                `${currentPlayer.name}, choose a treasure to trade for a random one:`);
-                            
-                            // Create buttons for each treasure
-                            const eventButtons = document.getElementById('event-buttons');
-                            eventButtons.innerHTML = '';
-                            
-                            barterableTreasures.forEach((treasure, indexInBarterable) => {
-                                const button = document.createElement('button');
-                                button.textContent = treasure.title;
-                                button.onclick = () => {
-                                    // Find and remove the selected non-major treasure from the player's actual inventory
-                                    const actualTreasureIndex = currentPlayer.treasures.findIndex(t => t.title === treasure.title && t.value === treasure.value && !t.major);
-                                    if (actualTreasureIndex === -1) { 
-                                         toast(`Error: Could not find ${treasure.title} in your inventory to barter.`);
-                                         hideEvent();
-                                         setTimeout(nextPlayer, 1000);
-                                         return;
+                            const barterMessage = `${currentPlayer.name}, choose a non-major treasure to trade:`;
+                            const barterButtons = barterableTreasures.map(treasure => ({
+                                text: treasure.title,
+                                onclick: () => {
+                                    hideEvent();
+                                    const actualIndex = currentPlayer.treasures.findIndex(t => t.title === treasure.title && !t.major);
+                                    if (actualIndex === -1) {
+                                        toast(`Error: Could not find ${treasure.title} to barter.`);
+                                        setTimeout(nextPlayer, 1000);
+                                        return;
                                     }
-                                    const tradedOutTreasure = currentPlayer.treasures.splice(actualTreasureIndex, 1)[0];
-                                    
-                                    // Add the traded-out treasure back to the dynamic deck of the current era
-                                    const currentEraDeckForBarter = gameState.treasureDecks[cellData.era];
-                                    if (currentEraDeckForBarter) {
-                                        currentEraDeckForBarter.push(tradedOutTreasure);
-                                        shuffleArray(currentEraDeckForBarter); // Shuffle after adding back
-                                         if (gameId) {
-                                            db.ref(`/games/${gameId}/state/treasureDecks/${cellData.era}`).set(currentEraDeckForBarter);
-                                        }
-                                    }
+                                    const tradedOut = currentPlayer.treasures.splice(actualIndex, 1)[0];
+                                    const deck = gameState.treasureDecks[cellData.era];
+                                    deck.push(tradedOut);
+                                    shuffleArray(deck);
 
-                                    // Get a new random treasure from the dynamic deck of the current era
-                                    if (currentEraDeckForBarter && currentEraDeckForBarter.length > 0) {
-                                        const newTreasure = currentEraDeckForBarter.shift(); // Draw from the top and remove it
+                                    if (deck.length > 0) {
+                                        const newTreasure = deck.shift();
                                         currentPlayer.treasures.push(newTreasure);
-                                        
-                                        // Show the new treasure
-                                        hideEvent();
-                                        toast(`${currentPlayer.name} traded ${tradedOutTreasure.title} (Worth ${tradedOutTreasure.value || 0}) for ${newTreasure.title} (Worth ${newTreasure.value})!`);
+                                        toast(`Traded ${tradedOut.title} for ${newTreasure.title}!`);
                                         if (gameId) {
-                                            db.ref(`/games/${gameId}/state/treasureDecks/${cellData.era}`).set(currentEraDeckForBarter);
+                                            db.ref(`/games/${gameId}/state/treasureDecks/${cellData.era}`).set(deck);
                                             db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/treasures`).set(currentPlayer.treasures);
                                         }
-                                        updatePlayerInfo();
-                                        sounds.interaction.stop(); // Stop sound on completion
-                                        setTimeout(() => {
-                                            showItemModal(newTreasure); // showItemModal handles next player
-                                        }, 1000);
+                                        setTimeout(() => showItemModal(newTreasure), 1000);
                                     } else {
-                                        hideEvent();
-                                        toast(`${currentPlayer.name} traded ${tradedOutTreasure.title} but got nothing in return from the ${cellData.era} era! The deck is empty.`);
-                                        if (gameId) { // Update player's treasures even if nothing new drawn
-                                            db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/treasures`).set(currentPlayer.treasures);
-                                        }
-                                        updatePlayerInfo();
-                                        sounds.interaction.stop(); // Stop sound here as well
+                                        toast(`Traded ${tradedOut.title} but the deck was empty!`);
+                                        if (gameId) db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/treasures`).set(currentPlayer.treasures);
                                         setTimeout(nextPlayer, 1000);
                                     }
-                                };
-                                eventButtons.appendChild(button);
+                                    updatePlayerInfo();
+                                    sounds.interaction.stop();
+                                }
+                            }));
+
+                            barterButtons.push({
+                                text: 'Skip',
+                                onclick: () => {
+                                    hideEvent();
+                                    toast(`${currentPlayer.name} chose not to barter.`);
+                                    sounds.interaction.stop();
+                                    setTimeout(nextPlayer, 1000);
+                                }
                             });
-                            
-                            // Add skip button
-                            const skipButton = document.createElement('button');
-                            skipButton.textContent = 'Skip';
-                            skipButton.onclick = () => {
-                                hideEvent();
-                                toast(`${currentPlayer.name} chose not to barter.`);
-                                sounds.interaction.stop(); // Stop sound on skip
-                                setTimeout(nextPlayer, 1000);
-                            };
-                            eventButtons.appendChild(skipButton);
+                            showEvent('Barter', barterMessage, barterButtons);
                             
                             return; // Return here as we'll handle next steps after selection
                         } else {
