@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ReinKarma</title>
     <!-- Firebase SDK and Initialization -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -93,8 +93,11 @@
             overflow: hidden;
             touch-action: manipulation;
             height: 100vh;
+            height: 100dvh; /* Use dynamic viewport height for mobile browsers */
             display: flex;
             flex-direction: column;
+            /* Safe area for notched phones and home indicator */
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
         }
         
         .empty-square {
@@ -597,6 +600,115 @@
             border-image-source: url('https://firebasestorage.googleapis.com:443/v0/b/sticky-20bca.appspot.com/o/game%2Fec245d37-f7dd-42ea-b9e6-290d3b34a45b%2Fassets%2F0F6CE608-7672-4AF9-81A2-114C2FF834F8.png?alt=media&token=b2bdd63c-6499-44b3-8375-5d2a4c28dbee');
             border-image-slice: 40;
             border-image-repeat: stretch;
+        }
+
+        /* Mobile-first responsive styles */
+        @media (max-width: 768px), (max-height: 600px) {
+            #game-container {
+                min-height: 0; /* Allow board to shrink on small screens */
+            }
+            #board-wrapper {
+                width: 98vmin;
+                height: 98vmin;
+                max-width: min(100vw - 20px, 98vmin);
+                max-height: min(100vh - 140px, 98vmin); /* Reserve space for player-info and controls */
+            }
+            #board-container {
+                padding: 2px;
+                flex: 1;
+                min-height: 0;
+            }
+            #player-info {
+                padding: 6px 8px;
+                gap: 6px;
+                flex-shrink: 0;
+            }
+            .player-stats {
+                width: auto;
+                min-width: 100px;
+                max-width: 180px;
+                padding: 6px;
+                margin: 3px;
+                font-size: 0.85em;
+            }
+            .player-stats h4 {
+                font-size: 0.9em;
+            }
+            .treasures-list {
+                max-height: 45px;
+                font-size: 0.75em;
+            }
+            #controls {
+                padding: 8px;
+                padding-bottom: max(8px, env(safe-area-inset-bottom));
+                flex-shrink: 0;
+                gap: 8px;
+            }
+            #controls button {
+                padding: 12px 18px;
+                font-size: 15px;
+                min-height: 44px; /* iOS touch target minimum */
+            }
+            #roll-button {
+                min-width: 110px;
+            }
+            #dice-container {
+                height: 50px;
+            }
+            .dice {
+                width: 40px;
+                height: 40px;
+                margin: 0 3px;
+            }
+            #dice-total {
+                font-size: 16px;
+            }
+            #zoom-controls {
+                top: 8px;
+                left: 8px;
+            }
+            #zoom-controls button {
+                width: 36px;
+                height: 36px;
+                font-size: 16px;
+            }
+            #rules-button {
+                bottom: max(10px, env(safe-area-inset-bottom));
+                right: 10px;
+            }
+            .player-token {
+                width: 14px;
+                height: 14px;
+                font-size: 7px;
+            }
+            .player-token.current-player {
+                width: 18px;
+                height: 18px;
+            }
+            .cell {
+                font-size: 8px;
+            }
+        }
+
+        /* Extra small screens (narrow phones) */
+        @media (max-width: 380px) {
+            .player-stats {
+                max-width: 150px;
+            }
+            #roll-button {
+                min-width: 90px;
+            }
+        }
+
+        /* Pause button - ensure it stays above controls and safe area on mobile */
+        @media (max-width: 768px), (max-height: 600px) {
+            #pause-button {
+                bottom: max(55px, calc(env(safe-area-inset-bottom) + 50px)) !important;
+                width: 46px !important;
+                height: 46px !important;
+                min-width: 46px; /* Touch target */
+                min-height: 46px;
+            }
         }
     </style>
 </head>
@@ -2300,10 +2412,10 @@ Industrial Age\tFuture steam punk gear\t500`;
             }
             cameraUpdateInterval = setInterval(() => {
                 if (autoFollowEnabled && followPlayer && gameState.gameStarted && !isDragging) {
-                    // Only apply gentle centering (not instant) to avoid jarring camera movements
+                    // Apply gentle centering to keep current player token in view
                     centerOnPlayer(gameState.currentPlayerIndex, false);
                 }
-            }, 500); // Check every 500ms - frequent enough for smooth following but not too CPU intensive
+            }, 250); // 250ms for tighter follow - especially important on mobile where viewport is small
         }
         
         function startDrag(e) {
@@ -2392,9 +2504,9 @@ Industrial Age\tFuture steam punk gear\t500`;
             if (!position) return;
             
             // Calculate the center position of the cell in the grid
-            // Adjust for the padding in the game board
-            const paddingPixels = 8; // Matches the padding in #game-board
-            const gapPixels = 8; // Matches the gap in #game-board
+            // Adjust for the padding in the game board (must match #game-board CSS: padding 6px, gap 6px)
+            const paddingPixels = 6;
+            const gapPixels = 6;
             
             // Calculate the effective dimensions accounting for padding and gaps
             const boardWrapper = document.getElementById('board-wrapper');
@@ -2428,8 +2540,11 @@ Industrial Age\tFuture steam punk gear\t500`;
                 } else {
                     // Otherwise, move a percentage of the way there for smoother motion
                     // The interpolation factor controls how quickly the camera catches up
-                    // Using a higher factor for current player to ensure they stay centered
-                    const interpolationFactor = playerIndex === gameState.currentPlayerIndex ? 0.92 : 0.85;
+                    // Using a higher factor for current player - tighter follow on mobile (smaller viewport)
+                    const isMobile = window.innerWidth <= 768 || window.innerHeight <= 600;
+                    const interpolationFactor = playerIndex === gameState.currentPlayerIndex 
+                        ? (isMobile ? 0.96 : 0.92) 
+                        : 0.85;
                     panX += distX * interpolationFactor;
                     panY += distY * interpolationFactor;
                 }
@@ -4264,7 +4379,6 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                     }
                     rollButton.disabled = false;
                     toast(`It's ${currentPlayerObj.name}'s turn. Roll the dice!`);
-                startPlayerTurnLogic(currentPlayerObj); // Pass the player object here
                 };
 
                 // Human Player Logic for initial insurance
@@ -4461,6 +4575,8 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
         function processCellEffect() {
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
             const cellData = gameState.board[currentPlayer.position];
+            // Re-center on current player when processing cell (e.g. after landing, before showing event modal)
+            centerOnPlayer(gameState.currentPlayerIndex, true);
             
             if (!cellData) {
                 console.warn("No cell data found for player position, proceeding to next player.");
@@ -4668,6 +4784,12 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         } else if (card.type === 'Lose a turn') {
                             currentPlayer.skipNextTurn = true;
                             toast(`${currentPlayer.name} loses their next turn: ${card.description}`);
+                            if (gameId) {
+                                db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/skipNextTurn`).set(true);
+                            }
+                        } else {
+                            // Fallback for any unexpected card type - ensure game doesn't freeze
+                            console.warn('Twist of Fate: Unhandled card type:', card.type);
                         }
 
                         // Add an OK button for Collect, Pay, Lose a turn outcomes
@@ -4678,6 +4800,10 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             updatePlayerInfo();
                             // Stop twist of fate sound when turn ends
                             sounds.twistOfFate.stop();
+                            // Sync credits to Firebase for multiplayer (Collect case - Pay already syncs in its block)
+                            if (gameId && card.type === 'Collect') {
+                                db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
+                            }
                             setTimeout(nextPlayer, 1000);
                         };
                         twistButtons.appendChild(okButton);
@@ -4858,6 +4984,9 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             eraButton.onclick = () => {
                                 const newPosition = titleSquareIndices[index]; // index is the targetEraIndex
                                 currentPlayer.position = newPosition;
+                                if (gameId) {
+                                    db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/position`).set(newPosition);
+                                }
                                 placePlayerTokens();
                                 toast(`${currentPlayer.name} traveled to the ${eraName} era's Title square!`);
 
