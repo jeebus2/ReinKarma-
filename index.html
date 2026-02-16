@@ -705,8 +705,39 @@
             }
         }
 
+        /* End Turn button - safety valve at top center when player can pass their turn */
+        #end-turn-button {
+            position: fixed;
+            top: max(8px, env(safe-area-inset-top));
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            padding: 10px 24px;
+            font-size: 14px;
+            font-weight: bold;
+            background-color: rgba(230, 126, 34, 0.95);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            cursor: pointer;
+            display: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            touch-action: manipulation;
+        }
+        #end-turn-button:hover {
+            background-color: rgba(241, 148, 0, 1);
+        }
+        #end-turn-button:active {
+            transform: translateX(-50%) scale(0.98);
+        }
+
         /* Pause button - ensure it stays above controls and safe area on mobile */
         @media (max-width: 768px), (max-height: 600px) {
+            #end-turn-button {
+                padding: 12px 20px;
+                font-size: 13px;
+                min-height: 44px;
+            }
             #pause-button {
                 bottom: max(55px, calc(env(safe-area-inset-bottom) + 50px)) !important;
                 width: 46px !important;
@@ -1082,6 +1113,9 @@
     <button id="end-game-button" style="margin: 10px; padding: 12px 25px; background-color: #e74c3c; color: white; border: none; border-radius: 5px; font-size: 1rem; cursor: pointer; width: 80%;">End Game</button>
   </div>
 </div>
+
+<!-- End Turn button - safety valve at top when player can pass their turn -->
+<button id="end-turn-button">End Turn</button>
 
 <!-- Floating Pause Button -->
 <button id="pause-button" style="position: fixed; bottom: 65px; right: 15px; width: 50px; height: 50px; border-radius: 50%; background-color: rgba(0, 0, 0, 0.6); color: white; font-size: 1.5rem; border: 2px solid rgba(255, 255, 255, 0.3); cursor: pointer; z-index: 1000; display: flex; justify-content: center; align-items: center;">⏸️</button>
@@ -3556,6 +3590,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             // The showTurnTransitionModal will lead to proceedWithTurn,
             // where the initial insurance offer will happen for the first player.
             showTurnTransitionModal(gameState.players[gameState.currentPlayerIndex]); // currentPlayerIndex is 0
+            updateEndTurnButtonVisibility();
         }
         
 
@@ -4132,6 +4167,29 @@ Industrial Age\tFuture steam punk gear\t500`;
             if (gameState.processingMove) return; // Prevent multiple turns during processing
             
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+            if (!currentPlayer) return;
+            
+            // Offer initial insurance on AI's first turn if not yet offered
+            if (!currentPlayer.initialInsuranceOffered) {
+                currentPlayer.initialInsuranceOffered = true;
+                const insuranceCost = 500;
+                if (!currentPlayer.hasInsurance && currentPlayer.credits >= insuranceCost) {
+                    currentPlayer.credits -= insuranceCost;
+                    currentPlayer.hasInsurance = true;
+                    toast(`${currentPlayer.name} bought initial insurance!`);
+                } else if (!currentPlayer.hasInsurance) {
+                    toast(`${currentPlayer.name} declined initial insurance.`);
+                }
+                updatePlayerInfo();
+            }
+            
+            // If AI has skipNextTurn (Hazard, Twist of Fate "Lose a turn"), consume and advance
+            if (currentPlayer.skipNextTurn) {
+                currentPlayer.skipNextTurn = false;
+                toast(`${currentPlayer.name} misses their turn!`);
+                setTimeout(() => nextPlayer(), 1500);
+                return;
+            }
             
             // Disable roll button during AI turn
             rollButton.disabled = true;
@@ -4270,17 +4328,17 @@ Industrial Age\tFuture steam punk gear\t500`;
             return cell ? cell.type : 'Unknown';
         }
         
-        // Re-entrancy guard: prevent multiple simultaneous turn transitions
-        let turnTransitionInProgress = false;
+        // Re-entrancy guard: prevent multiple simultaneous turn transitions (window for cross-script access)
+        window.turnTransitionInProgress = false;
 
         // Function to move to the next player
         function nextPlayer() {
-            if (turnTransitionInProgress) return;
+            if (window.turnTransitionInProgress) return;
             if (!gameState.players || gameState.players.length === 0) {
                 console.warn("nextPlayer: No players in game");
                 return;
             }
-            turnTransitionInProgress = true;
+            window.turnTransitionInProgress = true;
             
             // Reset processing flag
             gameState.processingMove = false;
@@ -4288,7 +4346,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             
             // Check if game is over (someone reached Nirvana)
             if (gameState.players.some(p => p.position === 169)) {
-                turnTransitionInProgress = false;
+                window.turnTransitionInProgress = false;
                 endGame();
                 return;
             }
@@ -4302,18 +4360,19 @@ Industrial Age\tFuture steam punk gear\t500`;
             
             if (gameId) {
                 // Multiplayer: End turn and update Firebase
-                endTurn(() => { turnTransitionInProgress = false; });
+                endTurn(() => { window.turnTransitionInProgress = false; });
             } else {
                 // Single player: Advance to next player, skipping any with skipNextTurn
                 advanceToNextPlayerSingle(() => {
                     const playerForThisTurn = gameState.players[gameState.currentPlayerIndex];
                     if (!playerForThisTurn) {
-                        turnTransitionInProgress = false;
+                        window.turnTransitionInProgress = false;
                         return;
                     }
                     updatePlayerInfo(); 
                     showTurnTransitionModal(playerForThisTurn);
-                    turnTransitionInProgress = false;
+                    updateEndTurnButtonVisibility(); // Show/hide based on next player (AI = hide)
+                    window.turnTransitionInProgress = false;
                 });
             }
         }
@@ -4432,6 +4491,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                     }
                     rollButton.disabled = false;
                     toast(`It's ${currentPlayerObj.name}'s turn. Roll the dice!`);
+                    updateEndTurnButtonVisibility();
                 };
 
                 // Human Player Logic for initial insurance
@@ -4503,6 +4563,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
             // Human player's turn
             rollButton.disabled = false; // NOW enable it, after all checks (insurance, skip turn).
             toast(`It's ${currentPlayerObj.name}'s turn. Roll the dice!`);
+            updateEndTurnButtonVisibility();
         }
         
         // End the game and show final scores
@@ -4568,6 +4629,15 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
         // Offer insurance conditionally (e.g., on era change or Title square)
         function offerInsuranceConditional(isEraChangeOffer, nextActionCallback) {
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+            if (!currentPlayer) {
+                if (nextActionCallback) setTimeout(nextActionCallback, 100);
+                return;
+            }
+            // Only offer if player doesn't already have insurance
+            if (currentPlayer.hasInsurance) {
+                if (nextActionCallback) setTimeout(nextActionCallback, 300);
+                return;
+            }
             const insuranceCost = 500;
             let offerReasonMessage = "";
 
@@ -4575,9 +4645,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                 offerReasonMessage = `Welcome to the ${gameState.currentEra.charAt(0).toUpperCase() + gameState.currentEra.slice(1)} Era, ${currentPlayer.name}! `;
             }
 
-
-
-            // Human Player Logic
+            // Human Player Logic - show offer since they don't have insurance
             showEvent('Insurance Offer',
                 `${offerReasonMessage}Would you like to buy insurance protection?\n\n` +
                 `Insurance costs ${insuranceCost} credits and protects against Sudden Death.\n\n` +
@@ -4772,6 +4840,41 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             sounds.twistOfFate.stop();
                             setTimeout(nextPlayer, 1000);
                             break;
+                        }
+
+                        // AI handles Twist cards without modal
+                        if (currentPlayer.isAI) {
+                            if (card.type === 'Roll again') {
+                                toast(`${currentPlayer.name} (Twist): ${card.description}`);
+                                sounds.twistOfFate.stop();
+                                setTimeout(handleAITurn, 1500);
+                                return;
+                            }
+                            if (card.type === 'Collect') {
+                                const amountToGain = card.amount || 0;
+                                currentPlayer.credits += amountToGain;
+                                gameState.lifetimeCredits[gameState.currentPlayerIndex] += amountToGain;
+                                if (gameId) db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
+                                toast(`${currentPlayer.name} (Twist) collected ${amountToGain} credits.`);
+                            } else if (card.type === 'Pay') {
+                                const amountToPay = Math.min(card.amount || 0, currentPlayer.credits);
+                                currentPlayer.credits -= amountToPay;
+                                gameState.charityPool.credits += amountToPay;
+                                if (gameId) {
+                                    db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
+                                    db.ref(`/games/${gameId}/state/charityPool/credits`).set(gameState.charityPool.credits);
+                                }
+                                toast(`${currentPlayer.name} (Twist) paid ${amountToPay} credits.`);
+                            } else if (card.type === 'Lose a turn') {
+                                currentPlayer.skipNextTurn = true;
+                                if (gameId) db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/skipNextTurn`).set(true);
+                                toast(`${currentPlayer.name} (Twist) loses their next turn: ${card.description}`);
+                            }
+                            sounds.twistOfFate.stop();
+                            if (card.type !== 'Roll again') {
+                                setTimeout(nextPlayer, 1500);
+                            }
+                            return;
                         }
 
                         showEvent(`${card.originalEra} - Twist of Fate`, card.description);
@@ -5303,6 +5406,17 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                     case 'Hazard':
                         // Lose a turn
                         const hazardName = cellData.hazardName || 'Unknown Hazard';
+                        currentPlayer.skipNextTurn = true;
+                        if (gameId) {
+                            db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/skipNextTurn`).set(true);
+                        }
+                        
+                        if (currentPlayer.isAI) {
+                            toast(`${currentPlayer.name} encountered ${hazardName}! They will lose their next turn.`);
+                            setTimeout(nextPlayer, 1500);
+                            return;
+                        }
+                        
                         const hazardMessage = `${currentPlayer.name}, you've encountered a hazard: ${hazardName}!\n\n` +
                                             `You will lose your next turn.`;
                         
@@ -5310,8 +5424,6 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         eventTitle.textContent = 'Hazard: ' + hazardName;
                         eventDescription.innerHTML = hazardMessage;
                         eventDisplay.style.display = 'block';
-
-                        currentPlayer.skipNextTurn = true;
 
                         const hazardEventButtons = document.getElementById('event-buttons');
                         hazardEventButtons.innerHTML = ''; // Clear any existing/default buttons
@@ -6263,10 +6375,47 @@ function restrictEventsToCurrentPlayer() {
     // Enable or disable controls based on whose turn it is
     rollButton.disabled = !isMyTurn || gameState.processingMove;
     inventoryButton.disabled = false; // Always allow viewing inventory
-    
-    
+    updateEndTurnButtonVisibility(isMyTurn);
   });
 }
+
+// End Turn button - safety valve to force-advance when turn logic gets stuck
+function updateEndTurnButtonVisibility(isMyTurnOverride) {
+  const btn = document.getElementById("end-turn-button");
+  if (!btn) return;
+  const gameContainer = document.getElementById("game-container");
+  if (!gameState.gameStarted || !gameContainer || gameContainer.style.display !== "flex") {
+    btn.style.display = "none";
+    return;
+  }
+  const isMyTurn = isMyTurnOverride !== undefined ? isMyTurnOverride 
+    : (gameId ? (gameState.players[gameState.currentPlayerIndex]?.id === clientId) : !gameState.players[gameState.currentPlayerIndex]?.isAI);
+  btn.style.display = isMyTurn ? "block" : "none";
+}
+
+function forceEndTurn() {
+  if (!gameState.gameStarted || !gameState.players?.length) return;
+  const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+  const isMyTurn = gameId 
+    ? (currentPlayer?.id === clientId)
+    : !currentPlayer?.isAI;
+  if (!isMyTurn) return;
+  window.turnTransitionInProgress = false;
+  gameState.processingMove = false;
+  if (gameId) db.ref(`/games/${gameId}/state/processingMove`).set(false);
+  document.getElementById("turn-transition-modal").style.display = "none";
+  document.getElementById("event-display").style.display = "none";
+  document.getElementById("cell-modal").style.display = "none";
+  document.getElementById("item-modal").style.display = "none";
+  document.getElementById("inventory").style.display = "none";
+  document.getElementById("read-only-event-modal").style.display = "none";
+  document.getElementById("waiting-for-player-modal").style.display = "none";
+  toast("Turn ended.");
+  nextPlayer();
+  updateEndTurnButtonVisibility(); // Update immediately (single player); multiplayer will update via listenForTurn
+}
+
+document.getElementById("end-turn-button").onclick = forceEndTurn;
 
 // Pause menu functionality
 document.getElementById("pause-button").onclick = () => {
@@ -6552,6 +6701,7 @@ function listenForTurn() {
                centerOnPlayer(gameState.currentPlayerIndex, true);
           }
       }
+      updateEndTurnButtonVisibility(isMyClientTurn);
       lastPlayerIdForTurnModal = currentPlayerId; // Store for the next comparison.
     }
   });
