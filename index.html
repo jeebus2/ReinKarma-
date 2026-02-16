@@ -509,42 +509,43 @@
         .dice-face:nth-child(5) { transform: rotateY(90deg) translateZ(25px); }
         .dice-face:nth-child(6) { transform: rotateY(-90deg) translateZ(25px); }
         
-        /* Dice dots */
+        /* Dice dots - 10px for clearer visibility on faces 5 and 6 */
         .dot {
             position: absolute;
-            width: 8px;
-            height: 8px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             background-color: #333;
+            transform: translate(-50%, -50%); /* Center dots on their position */
         }
         
         /* Dot positions for each face */
-        .dice-face.face-1 .dot:nth-child(1) { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        .dice-face.face-1 .dot:nth-child(1) { top: 50%; left: 50%; }
         
         .dice-face.face-2 .dot:nth-child(1) { top: 25%; left: 25%; }
-        .dice-face.face-2 .dot:nth-child(2) { bottom: 25%; right: 25%; }
+        .dice-face.face-2 .dot:nth-child(2) { top: 75%; left: 75%; }
         
         .dice-face.face-3 .dot:nth-child(1) { top: 25%; left: 25%; }
-        .dice-face.face-3 .dot:nth-child(2) { top: 50%; left: 50%; transform: translate(-50%, -50%); }
-        .dice-face.face-3 .dot:nth-child(3) { bottom: 25%; right: 25%; }
+        .dice-face.face-3 .dot:nth-child(2) { top: 50%; left: 50%; }
+        .dice-face.face-3 .dot:nth-child(3) { top: 75%; left: 75%; }
         
         .dice-face.face-4 .dot:nth-child(1) { top: 25%; left: 25%; }
-        .dice-face.face-4 .dot:nth-child(2) { top: 25%; right: 25%; }
-        .dice-face.face-4 .dot:nth-child(3) { bottom: 25%; left: 25%; }
-        .dice-face.face-4 .dot:nth-child(4) { bottom: 25%; right: 25%; }
+        .dice-face.face-4 .dot:nth-child(2) { top: 25%; left: 75%; }
+        .dice-face.face-4 .dot:nth-child(3) { top: 75%; left: 25%; }
+        .dice-face.face-4 .dot:nth-child(4) { top: 75%; left: 75%; }
         
         .dice-face.face-5 .dot:nth-child(1) { top: 25%; left: 25%; }
-        .dice-face.face-5 .dot:nth-child(2) { top: 25%; right: 25%; }
-        .dice-face.face-5 .dot:nth-child(3) { top: 50%; left: 50%; transform: translate(-50%, -50%); }
-        .dice-face.face-5 .dot:nth-child(4) { bottom: 25%; left: 25%; }
-        .dice-face.face-5 .dot:nth-child(5) { bottom: 25%; right: 25%; }
+        .dice-face.face-5 .dot:nth-child(2) { top: 25%; left: 75%; }
+        .dice-face.face-5 .dot:nth-child(3) { top: 50%; left: 50%; }
+        .dice-face.face-5 .dot:nth-child(4) { top: 75%; left: 25%; }
+        .dice-face.face-5 .dot:nth-child(5) { top: 75%; left: 75%; }
         
         .dice-face.face-6 .dot:nth-child(1) { top: 25%; left: 25%; }
-        .dice-face.face-6 .dot:nth-child(2) { top: 25%; right: 25%; }
+        .dice-face.face-6 .dot:nth-child(2) { top: 25%; left: 75%; }
         .dice-face.face-6 .dot:nth-child(3) { top: 50%; left: 25%; }
-        .dice-face.face-6 .dot:nth-child(4) { top: 50%; right: 25%; }
-        .dice-face.face-6 .dot:nth-child(5) { bottom: 25%; left: 25%; }
-        .dice-face.face-6 .dot:nth-child(6) { bottom: 25%; right: 25%; }
+        .dice-face.face-6 .dot:nth-child(4) { top: 50%; left: 75%; }
+        .dice-face.face-6 .dot:nth-child(5) { top: 75%; left: 25%; }
+        .dice-face.face-6 .dot:nth-child(6) { top: 75%; left: 75%; }
         
         #dice-total {
             font-size: 18px;
@@ -659,6 +660,10 @@
                 width: 40px;
                 height: 40px;
                 margin: 0 3px;
+            }
+            .dice .dot {
+                width: 8px;
+                height: 8px;
             }
             #dice-total {
                 font-size: 16px;
@@ -3915,9 +3920,15 @@ Industrial Age\tFuture steam punk gear\t500`;
             if (diceResult.isDoubles && !currentPlayer.isAI) {
                 // For human players, offer choice to move forward or backward
                 setTimeout(() => {
+                    const forwardPos = Math.min(currentPlayer.position + diceResult.total, 169);
+                    const backwardPos = Math.max(currentPlayer.position - diceResult.total, 0);
+                    const forwardSquare = getSquarePreview(forwardPos);
+                    const backwardSquare = getSquarePreview(backwardPos);
                     showEvent('Doubles Rolled!', 
                         `${currentPlayer.name}, you rolled doubles (${diceResult.die1} and ${diceResult.die2})!\n\n` +
-                        `You can choose to move forward or backward ${diceResult.total} spaces.`);
+                        `You can choose to move forward or backward ${diceResult.total} spaces.\n\n` +
+                        `📍 Forward → Space ${forwardPos + 1}: ${forwardSquare}\n` +
+                        `📍 Backward → Space ${backwardPos + 1}: ${backwardSquare}`);
                     
                     // Clear previous buttons
                     const directionButtons = document.getElementById('event-buttons');
@@ -4208,10 +4219,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                 diceDisplay.textContent = `🎲 ${roll}`;
                 toast(`${currentPlayer.name} rolled a ${roll}`);
                 
-                // Increment turn count
-                gameState.turnCount++;
-                
-                // Increment turn count for AI as well
+                // Increment turn count for AI
                 gameState.turnCount++;
 
                 // Move the player using animateMovement for full logic
@@ -4254,14 +4262,33 @@ Industrial Age\tFuture steam punk gear\t500`;
             if (position < 169) return 'ancient';  // Indices 137-168
             return 'nirvana'; // Index 169
         }
+
+        // Get square type name for preview (e.g. when choosing forward/backward on Doubles or Lucky Day)
+        function getSquarePreview(position) {
+            if (!gameState.board || position < 0 || position > 169) return 'Unknown';
+            const cell = gameState.board[position];
+            return cell ? cell.type : 'Unknown';
+        }
         
+        // Re-entrancy guard: prevent multiple simultaneous turn transitions
+        let turnTransitionInProgress = false;
+
         // Function to move to the next player
         function nextPlayer() {
+            if (turnTransitionInProgress) return;
+            if (!gameState.players || gameState.players.length === 0) {
+                console.warn("nextPlayer: No players in game");
+                return;
+            }
+            turnTransitionInProgress = true;
+            
             // Reset processing flag
             gameState.processingMove = false;
+            if (gameId) db.ref(`/games/${gameId}/state/processingMove`).set(false);
             
             // Check if game is over (someone reached Nirvana)
             if (gameState.players.some(p => p.position === 169)) {
+                turnTransitionInProgress = false;
                 endGame();
                 return;
             }
@@ -4275,18 +4302,44 @@ Industrial Age\tFuture steam punk gear\t500`;
             
             if (gameId) {
                 // Multiplayer: End turn and update Firebase
-                endTurn();
+                endTurn(() => { turnTransitionInProgress = false; });
             } else {
-                // Single player: Move to next player index locally
-                gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
-                const playerForThisTurn = gameState.players[gameState.currentPlayerIndex];
-                
-                // Update player info display early so the highlight moves immediately
-                updatePlayerInfo(); 
-                
-                // Show the transition modal
-                showTurnTransitionModal(playerForThisTurn);
+                // Single player: Advance to next player, skipping any with skipNextTurn
+                advanceToNextPlayerSingle(() => {
+                    const playerForThisTurn = gameState.players[gameState.currentPlayerIndex];
+                    if (!playerForThisTurn) {
+                        turnTransitionInProgress = false;
+                        return;
+                    }
+                    updatePlayerInfo(); 
+                    showTurnTransitionModal(playerForThisTurn);
+                    turnTransitionInProgress = false;
+                });
             }
+        }
+
+        // Single player: advance currentPlayerIndex, consuming skipNextTurn and skipping those players
+        function advanceToNextPlayerSingle(doneCallback) {
+            let nextIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+            let iterations = 0;
+            const maxIterations = gameState.players.length; // Prevent infinite loop
+            
+            while (iterations < maxIterations) {
+                const nextPlayerObj = gameState.players[nextIndex];
+                if (!nextPlayerObj) break;
+                
+                if (nextPlayerObj.skipNextTurn) {
+                    nextPlayerObj.skipNextTurn = false;
+                    toast(`${nextPlayerObj.name} misses their turn!`);
+                    nextIndex = (nextIndex + 1) % gameState.players.length;
+                    iterations++;
+                    continue;
+                }
+                break;
+            }
+            
+            gameState.currentPlayerIndex = nextIndex;
+            if (doneCallback) doneCallback();
         }
 
         // Track if the turn transition modal has been shown for the current turn
@@ -5304,9 +5357,16 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             
                             // Ask if they want to move forward or backward after dice animation completes
                             setTimeout(() => {
+                                const currentPos = currentPlayer.position;
+                                const forwardPos = Math.min(currentPos + diceResult.total, 169);
+                                const backwardPos = Math.max(currentPos - diceResult.total, 0);
+                                const forwardSquare = getSquarePreview(forwardPos);
+                                const backwardSquare = getSquarePreview(backwardPos);
                                 showEvent('Lucky Day', 
                                     `${currentPlayer.name}, you rolled a ${diceResult.total} (${diceResult.die1} and ${diceResult.die2}).\n\n` +
-                                    `Do you want to move forward or backward?`);
+                                    `Choose your direction:\n\n` +
+                                    `📍 Forward → Space ${forwardPos + 1}: ${forwardSquare}\n` +
+                                    `📍 Backward → Space ${backwardPos + 1}: ${backwardSquare}`);
                                 
                                 // Create direction buttons
                                 const directionButtons = document.getElementById('event-buttons');
@@ -5968,6 +6028,11 @@ document.getElementById("start-game-button").onclick = () => {
     // Find the index of the first player in the player list
     const firstPlayerIndex = playerList.indexOf(firstPlayerId);
     
+    // Store playersOrder in Firebase - array of player IDs in turn order (by slotIndex)
+    // This ensures reliable turn rotation regardless of Object.keys() order
+    const playersOrder = [...playerList].sort((a, b) => (playerSlots[a] || 0) - (playerSlots[b] || 0));
+    updated[`/games/${gameId}/state/playersOrder`] = playersOrder;
+    
     // Initialize full game state
     updated[`/games/${gameId}/state/currentPlayerId`] = firstPlayerId;
     updated[`/games/${gameId}/state/started`] = true;
@@ -6514,41 +6579,64 @@ function updateInventory(treasure) {
   });
 }
 
-function endTurn() {
+function endTurn(onComplete) {
   db.ref(`/games/${gameId}/state`).once("value").then(snapshot => {
     const gameData = snapshot.val() || {};
-    const players = Object.keys(gameData.players || {});
+    const players = gameData.players || {};
     
-    // Find the current player's position in the turn order
-    let currentIndex = -1;
-    for (let i = 0; i < players.length; i++) {
-      if (players[i] === clientId) {
-        currentIndex = i;
-        break;
-      }
+    // Use playersOrder from Firebase for reliable turn sequence (stored at game start)
+    // Fallback: build order from slotIndex if playersOrder missing (legacy games)
+    let playersOrder = gameData.playersOrder;
+    if (!playersOrder || playersOrder.length === 0) {
+      playersOrder = Object.keys(players).sort((a, b) => 
+        ((players[a]?.slotIndex ?? 999) - (players[b]?.slotIndex ?? 999)));
     }
     
-    if (currentIndex === -1) {
-      console.error("Current player not found in players list");
+    if (playersOrder.length === 0) {
+      console.error("No players in turn order");
+      if (onComplete) onComplete();
       return;
     }
     
-    const nextIndex = (currentIndex + 1) % players.length;
-    const nextId = players[nextIndex];
-    
-    // Find the correct player index in the gameState.players array
-    let nextPlayerStateIndex = -1;
-    if (gameData.players[nextId]) {
-      const nextPlayerSlotIndex = gameData.players[nextId].slotIndex;
-      nextPlayerStateIndex = gameState.players.findIndex(p => p.slotIndex === nextPlayerSlotIndex);
+    const currentIndex = playersOrder.indexOf(clientId);
+    if (currentIndex === -1) {
+      console.error("Current player not found in players list", clientId, playersOrder);
+      if (onComplete) onComplete();
+      return;
     }
     
+    // Find next player, skipping any with skipNextTurn (consume their skip)
+    let nextIndex = (currentIndex + 1) % playersOrder.length;
+    const playersToCheck = playersOrder.length;
+    let checks = 0;
+    const updates = {};
+    
+    while (checks < playersToCheck) {
+      const nextId = playersOrder[nextIndex];
+      const nextPlayerData = players[nextId];
+      if (!nextPlayerData) break;
+      
+      if (nextPlayerData.skipNextTurn) {
+        updates[`/games/${gameId}/state/players/${nextId}/skipNextTurn`] = false;
+        nextIndex = (nextIndex + 1) % playersOrder.length;
+        checks++;
+        continue;
+      }
+      break;
+    }
+    
+    const nextId = playersOrder[nextIndex];
+    
+    // Find the correct index in gameState.players array (by slotIndex)
+    let nextPlayerStateIndex = gameState.players.findIndex(p => p.id === nextId);
+    if (nextPlayerStateIndex === -1 && players[nextId]) {
+      nextPlayerStateIndex = gameState.players.findIndex(p => 
+        p.slotIndex === players[nextId].slotIndex);
+    }
     if (nextPlayerStateIndex === -1) {
-      // Fallback to using the raw index if we can't find by slotIndex
       nextPlayerStateIndex = nextIndex;
     }
     
-    // Reset processing move flag to ensure next player can take their turn
     gameState.processingMove = false;
     
     // Hide any open modals before ending turn
@@ -6558,24 +6646,27 @@ function endTurn() {
     document.getElementById("item-modal").style.display = "none";
     document.getElementById("inventory").style.display = "none";
     
-    // Update game state
-    db.ref(`/games/${gameId}/state`).update({ 
-      currentPlayerId: nextId,
-      currentPlayerIndex: nextPlayerStateIndex,
-      turnCount: (gameData.turnCount || 0) + 1,
-      processingMove: false, // Ensure this is reset in Firebase too
-      sharedModalContent: { active: false } // Clear shared modal when turn ends
+    updates[`/games/${gameId}/state/currentPlayerId`] = nextId;
+    updates[`/games/${gameId}/state/currentPlayerIndex`] = nextPlayerStateIndex;
+    updates[`/games/${gameId}/state/turnCount`] = (gameData.turnCount || 0) + 1;
+    updates[`/games/${gameId}/state/processingMove`] = false;
+    updates[`/games/${gameId}/state/sharedModalContent`] = { active: false };
+    
+    db.ref(`/games/${gameId}/state`).update(updates).then(() => {
+      const nextPlayerName = players[nextId]?.name || "next player";
+      const waitingModal = document.getElementById("waiting-for-player-modal");
+      const waitingMessage = document.getElementById("waiting-for-player-message");
+      waitingMessage.textContent = `Waiting for ${nextPlayerName}'s turn...`;
+      waitingModal.style.display = "block";
+      rollButton.disabled = true;
+      if (onComplete) onComplete();
+    }).catch(err => {
+      console.error("endTurn Firebase update failed:", err);
+      if (onComplete) onComplete();
     });
-    
-    // Show waiting modal for the player who just ended their turn
-    const nextPlayerName = gameData.players[nextId]?.name || "next player";
-    const waitingModal = document.getElementById("waiting-for-player-modal");
-    const waitingMessage = document.getElementById("waiting-for-player-message");
-    waitingMessage.textContent = `Waiting for ${nextPlayerName}'s turn...`;
-    waitingModal.style.display = "block";
-    
-    // Disable controls for this player
-    rollButton.disabled = true;
+  }).catch(err => {
+    console.error("endTurn read failed:", err);
+    if (onComplete) onComplete();
   });
 }
 
