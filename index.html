@@ -705,12 +705,11 @@
             }
         }
 
-        /* End Turn button - safety valve at top center when player can pass their turn */
+        /* End Turn button - safety valve at top left when player can pass their turn */
         #end-turn-button {
             position: fixed;
             top: max(8px, env(safe-area-inset-top));
-            left: 50%;
-            transform: translateX(-50%);
+            left: max(8px, env(safe-area-inset-left));
             z-index: 100;
             padding: 10px 24px;
             font-size: 14px;
@@ -728,7 +727,7 @@
             background-color: rgba(241, 148, 0, 1);
         }
         #end-turn-button:active {
-            transform: translateX(-50%) scale(0.98);
+            transform: scale(0.98);
         }
 
         /* Pause button - ensure it stays above controls and safe area on mobile */
@@ -1114,7 +1113,7 @@
   </div>
 </div>
 
-<!-- End Turn button - safety valve at top when player can pass their turn -->
+<!-- End Turn button - safety valve at top left when player can pass their turn -->
 <button id="end-turn-button">End Turn</button>
 
 <!-- Floating Pause Button -->
@@ -2653,6 +2652,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             
             closeRulesButton.addEventListener('click', function() {
                 rulesModal.style.display = 'none';
+                if (window.tryShowYourTurnModalIfNeeded) window.tryShowYourTurnModalIfNeeded();
             });
         }
         
@@ -4408,6 +4408,7 @@ Industrial Age\tFuture steam punk gear\t500`;
 
         // For multiplayer: detect when it becomes "my turn" so we show "Your Turn" modal once per turn
 let lastPlayerIdForTurnModal = null;
+var lastShownTurnCountForModal = -1; // So "Your Turn" shows again when same player gets turn after a skip (turnCount increases)
 let sharedModalContentListener = null; // Listener for shared modal content
 
 // Function to display shared modal content for inactive players
@@ -6436,6 +6437,7 @@ document.getElementById("pause-button").onclick = () => {
 
 document.getElementById("resume-game").onclick = () => {
   document.getElementById("pause-menu-modal").style.display = "none";
+  tryShowYourTurnModalIfNeeded();
 };
 
 document.getElementById("restart-game").onclick = () => {
@@ -6673,8 +6675,11 @@ function listenForTurn() {
       
       // MULTIPLAYER TURN UI: Firebase currentPlayerId is the single source of truth.
       const isMyClientTurn = currentPlayerId === clientId;
-      // Show "Your Turn" exactly once per turn: when currentPlayerId just became me (last stored id !== current).
-      const shouldShowYourTurnModal = isMyClientTurn && (lastPlayerIdForTurnModal !== currentPlayerId);
+      const turnCount = gameData.turnCount || 0;
+      // Show "Your Turn" when it's my turn AND (current player just changed to me, OR same player but turnCount increased e.g. after "lose a turn" skip)
+      const shouldShowYourTurnModal = isMyClientTurn && (
+          lastPlayerIdForTurnModal !== currentPlayerId || turnCount !== lastShownTurnCountForModal
+      );
 
       if (isMyClientTurn) {
           document.getElementById("waiting-for-player-modal").style.display = "none";
@@ -6690,6 +6695,7 @@ function listenForTurn() {
                   const pauseOpen = document.getElementById("pause-menu-modal").style.display === "flex";
                   const rulesOpen = document.getElementById("rules-modal").style.display !== "none" && document.getElementById("rules-modal").style.display !== "";
                   if (!pauseOpen && !rulesOpen) {
+                      lastShownTurnCountForModal = turnCount;
                       showTurnTransitionModal(myPlayerObject);
                   }
               }
@@ -6712,6 +6718,21 @@ function listenForTurn() {
   };
   ref.on("value", turnStateListenerCallback);
 }
+
+// Call when user closes Pause or Rules so "Your Turn" shows if it's their turn and we skipped it earlier
+function tryShowYourTurnModalIfNeeded() {
+  if (!gameId || !gameState.gameStarted || !gameState.players || !gameState.players.length) return;
+  var currentPlayer = gameState.players[gameState.currentPlayerIndex];
+  if (!currentPlayer || currentPlayer.id !== clientId) return;
+  if (document.getElementById("turn-transition-modal").style.display === "block") return;
+  var turnCount = gameState.turnCount || 0;
+  if (lastShownTurnCountForModal === turnCount) return;
+  var myPlayerObject = gameState.players.find(function(p) { return p.id === clientId; });
+  if (!myPlayerObject) return;
+  lastShownTurnCountForModal = turnCount;
+  showTurnTransitionModal(myPlayerObject);
+}
+window.tryShowYourTurnModalIfNeeded = tryShowYourTurnModalIfNeeded;
 
 function syncPlayerMove(position, credits, inventory, treasures) {
   const ref = db.ref(`/games/${gameId}/state/players/${clientId}`);
