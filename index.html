@@ -3319,10 +3319,17 @@ Industrial Age\tFuture steam punk gear\t500`;
             document.getElementById('item-close-button').onclick = () => {
                 itemModal.style.display = 'none';
                 // If this is a treasure reveal after landing on a square, move to next player
-                if (gameState.processingMove) {
+                if (gameState.processingMove || window.itemModalFromSquareAction) {
+                    window.itemModalFromSquareAction = false;
                     setTimeout(nextPlayer, 500);
                 }
             };
+        }
+        
+        // Call this when showing item modal from a square action so closing it always advances the turn
+        function showItemModalFromSquare(item) {
+            window.itemModalFromSquareAction = true;
+            showItemModal(item);
         }
         
         // Show toast message
@@ -4560,6 +4567,12 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                 return; // Stop further processing for the skipped player's turn
             }
             
+            // Single player: AI's turn — run AI logic instead of enabling roll button
+            if (!gameId && currentPlayerObj.isAI) {
+                handleAITurn();
+                return;
+            }
+            
             // Human player's turn
             rollButton.disabled = false; // NOW enable it, after all checks (insurance, skip turn).
             toast(`It's ${currentPlayerObj.name}'s turn. Roll the dice!`);
@@ -4784,7 +4797,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                     }
                                     updatePlayerInfo(); // Update treasures display
                                     setTimeout(() => {
-                                        showItemModal(treasure); // showItemModal will handle moving to next player after close
+                                        showItemModalFromSquare(treasure); // close will advance turn
                                     }, 1000);
                                 } else {
                                     hideEvent();
@@ -5017,8 +5030,12 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                             const stolenTreasure = targetPlayer.treasures.splice(foundIndex, 1)[0];
                                             currentPlayer.treasures.push(stolenTreasure);
                                             toast(`${currentPlayer.name} stole ${stolenTreasure.title} from ${targetPlayer.name}!`);
+                                            if (gameId) {
+                                                db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/treasures`).set(currentPlayer.treasures);
+                                                db.ref(`/games/${gameId}/state/players/${targetPlayer.id}/treasures`).set(targetPlayer.treasures);
+                                            }
                                             setTimeout(() => {
-                                                showItemModal(stolenTreasure);
+                                                showItemModalFromSquare(stolenTreasure);
                                             }, 1000);
                                         } else {
                                             toast(`Error: Could not find the selected treasure to steal from ${targetPlayer.name}.`);
@@ -5396,8 +5413,11 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         
                         // Show the treasure
                         toast(`${currentPlayer.name} found a major treasure: ${majorTreasure.title}! (Worth ${majorTreasure.value} credits)`);
+                        if (gameId) {
+                            db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/treasures`).set(currentPlayer.treasures);
+                        }
                         setTimeout(() => {
-                            showItemModal(majorTreasure);
+                            showItemModalFromSquare(majorTreasure);
                         }, 1000);
                         
                         updatePlayerInfo();
@@ -5544,48 +5564,46 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                     const totalTreasureCount = targetPlayer.treasures.length;
                                     button.textContent = `${targetPlayer.name} (${vulnerableTreasureCount} vulnerable / ${totalTreasureCount} total treasures)`;
                                     button.onclick = () => {
-                                        // Roll for duel
+                                        // Roll for duel (targetPlayer is the opponent)
                                         const playerRoll = rollTwoDice();
                                         const opponentRoll = rollTwoDice();
                                         
-                                        let result = `${currentPlayer.name} rolled ${playerRoll}, ${player.name} rolled ${opponentRoll}.\n\n`;
+                                        let result = `${currentPlayer.name} rolled ${playerRoll}, ${targetPlayer.name} rolled ${opponentRoll}.\n\n`;
                                         
                                         if (playerRoll > opponentRoll) {
-                                            // Current player wins
-                                            // Only steal non-major treasures
-                                            const stealableTreasures = player.treasures.filter(t => !t.major);
+                                            // Current player wins - only steal non-major treasures
+                                            const stealableTreasures = targetPlayer.treasures.filter(t => !t.major);
                                             if (stealableTreasures.length === 0) {
-                                                result += `${player.name} has no stealable treasures!`;
+                                                result += `${targetPlayer.name} has no stealable treasures!`;
                                             } else {
                                                 const treasureIndex = Math.floor(Math.random() * stealableTreasures.length);
                                                 const stolenTreasureDetails = stealableTreasures[treasureIndex];
                                                 
-                                                // Find this treasure in the player's actual inventory
                                                 let foundIndex = -1;
-                                                for(let k=0; k < player.treasures.length; k++){
-                                                    if(player.treasures[k].title === stolenTreasureDetails.title &&
-                                                       player.treasures[k].value === stolenTreasureDetails.value &&
-                                                       !player.treasures[k].major){
+                                                for (let k = 0; k < targetPlayer.treasures.length; k++) {
+                                                    if (targetPlayer.treasures[k].title === stolenTreasureDetails.title &&
+                                                        targetPlayer.treasures[k].value === stolenTreasureDetails.value &&
+                                                        !targetPlayer.treasures[k].major) {
                                                         foundIndex = k;
                                                         break;
                                                     }
                                                 }
                                                 
                                                 if (foundIndex !== -1) {
-                                                    const stolenTreasure = player.treasures.splice(foundIndex, 1)[0];
+                                                    const stolenTreasure = targetPlayer.treasures.splice(foundIndex, 1)[0];
                                                     currentPlayer.treasures.push(stolenTreasure);
-                                                    result += `${currentPlayer.name} wins and takes ${stolenTreasure.title} from ${player.name}!`;
+                                                    result += `${currentPlayer.name} wins and takes ${stolenTreasure.title} from ${targetPlayer.name}!`;
+                                                    if (gameId) {
+                                                        db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/treasures`).set(currentPlayer.treasures);
+                                                        db.ref(`/games/${gameId}/state/players/${targetPlayer.id}/treasures`).set(targetPlayer.treasures);
+                                                    }
                                                 } else {
                                                     result += `Error: Could not find the selected treasure to steal.`;
                                                 }
                                             }
-                                            const stolenTreasure = player.treasures.splice(treasureIndex, 1)[0];
-                                            currentPlayer.treasures.push(stolenTreasure);
-                                            
-                                            result += `${currentPlayer.name} wins and takes ${stolenTreasure.title} from ${player.name}!`;
                                         } else {
                                             // Opponent wins or tie (defender wins ties)
-                                            result += `${player.name} wins and keeps their treasure!`;
+                                            result += `${targetPlayer.name} wins and keeps their treasure!`;
                                         }
                                         
                                         // Show result
@@ -5747,7 +5765,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                         updatePlayerInfo();
                                         sounds.interaction.stop(); // Stop sound on completion
                                         setTimeout(() => {
-                                            showItemModal(newTreasure); // showItemModal handles next player
+                                            showItemModalFromSquare(newTreasure); // close will advance turn
                                         }, 1000);
                                     } else {
                                         hideEvent();
@@ -6509,14 +6527,25 @@ document.getElementById("end-game-button").onclick = () => {
   }
 };
 
+var turnStateListenerRef = null;
+var turnStateListenerCallback = null;
+
 function listenForTurn() {
-  // `lastPlayerIdForTurnModal` is already defined globally or at a higher scope
-  // `turnTransitionModalShown` is already defined globally or at a higher scope
-  
-  db.ref(`/games/${gameId}/state`).on("value", snapshot => {
+  if (!gameId) return;
+  var ref = db.ref(`/games/${gameId}/state`);
+  if (turnStateListenerRef && turnStateListenerCallback) {
+    turnStateListenerRef.off("value", turnStateListenerCallback);
+    turnStateListenerRef = null;
+    turnStateListenerCallback = null;
+  }
+  turnStateListenerRef = ref;
+  turnStateListenerCallback = function(snapshot) {
     const gameData = snapshot.val() || {};
     const currentPlayerId = gameData.currentPlayerId;
     const players = gameData.players || {};
+    if (currentPlayerId == null && gameData.gameStarted) {
+      return;
+    }
     const playerSlots = gameData.playerSlots || {};
     
     // Update game state from Firebase
@@ -6650,7 +6679,6 @@ function listenForTurn() {
       
       const isMyClientTurn = currentPlayerId === clientId;
       // A "new turn" for me means the currentPlayerIdFromFirebase just changed TO my clientId
-      // AND it wasn't my clientId in the previous Firebase state update.
       const isNewTurnForMyClient = isMyClientTurn && (lastPlayerIdForTurnModal !== currentPlayerId);
 
       if (isMyClientTurn) {
@@ -6659,23 +6687,18 @@ function listenForTurn() {
           inventoryButton.disabled = false;
 
           if (isNewTurnForMyClient && !turnTransitionModalShown) {
-                // Enhanced logging for debugging modal issues
-                // console.log(`[ModalDebug] Check: isMyTurn=${isMyClientTurn}, isNewTurn=${isNewTurnForMyClient}, modalShownFlag=${turnTransitionModalShown}, lastPlayerId=${lastPlayerIdForTurnModal}, currentId=${currentPlayerId}`);
-                // console.log(`[ModalDebug] Other modals: eventDisplay=${document.getElementById("event-display").style.display}, pastLife=${document.getElementById("past-life-modal").style.display}, rules=${document.getElementById("rules-modal").style.display}, pause=${document.getElementById("pause-menu-modal").style.display}, turnTransition=${document.getElementById("turn-transition-modal").style.display}`);
-              // This is the critical point: a genuinely new turn has started for this client,
-              // and we haven't shown the "Your Turn" modal for this specific turn instance yet.
+              // New turn for this client: ensure "Your Turn" always shows (don't block on other modals)
               const myPlayerObject = gameState.players.find(p => p.id === clientId);
               if (myPlayerObject) {
-                  // Check against other major modals as a safeguard
-                  if (document.getElementById("event-display").style.display === 'none' &&
-                      document.getElementById("past-life-modal").style.display === 'none' &&
-                      document.getElementById("rules-modal").style.display === 'none' && // Added rules modal check
-                      document.getElementById("pause-menu-modal").style.display !== 'flex' && 
-                      document.getElementById("turn-transition-modal").style.display !== 'block' && 
-                      (!gameData.turnCount || gameData.turnCount <= Object.keys(players).length ? true : document.getElementById("lobby-screen").style.display === 'none') // For first player, lobby must be gone
-                     ) {
-                      
-                      turnTransitionModalShown = true; // LOCK: Modal is being shown for THIS turn.
+                  // Hide any modals that might block the turn transition so the next player always gets "Your Turn"
+                  document.getElementById("event-display").style.display = "none";
+                  document.getElementById("cell-modal").style.display = "none";
+                  document.getElementById("read-only-event-modal").style.display = "none";
+                  // Only skip if pause or rules are open (user chose to open them)
+                  const pauseOpen = document.getElementById("pause-menu-modal").style.display === "flex";
+                  const rulesOpen = document.getElementById("rules-modal").style.display !== "none" && document.getElementById("rules-modal").style.display !== "";
+                  if (!pauseOpen && !rulesOpen) {
+                      turnTransitionModalShown = true;
                       showTurnTransitionModal(myPlayerObject);
                   }
               }
@@ -6704,7 +6727,8 @@ function listenForTurn() {
       updateEndTurnButtonVisibility(isMyClientTurn);
       lastPlayerIdForTurnModal = currentPlayerId; // Store for the next comparison.
     }
-  });
+  };
+  ref.on("value", turnStateListenerCallback);
 }
 
 function syncPlayerMove(position, credits, inventory, treasures) {
@@ -6767,7 +6791,7 @@ function endTurn(onComplete) {
       if (!nextPlayerData) break;
       
       if (nextPlayerData.skipNextTurn) {
-        updates[`/games/${gameId}/state/players/${nextId}/skipNextTurn`] = false;
+        updates[`players/${nextId}/skipNextTurn`] = false;
         nextIndex = (nextIndex + 1) % playersOrder.length;
         checks++;
         continue;
@@ -6796,11 +6820,11 @@ function endTurn(onComplete) {
     document.getElementById("item-modal").style.display = "none";
     document.getElementById("inventory").style.display = "none";
     
-    updates[`/games/${gameId}/state/currentPlayerId`] = nextId;
-    updates[`/games/${gameId}/state/currentPlayerIndex`] = nextPlayerStateIndex;
-    updates[`/games/${gameId}/state/turnCount`] = (gameData.turnCount || 0) + 1;
-    updates[`/games/${gameId}/state/processingMove`] = false;
-    updates[`/games/${gameId}/state/sharedModalContent`] = { active: false };
+    updates["currentPlayerId"] = nextId;
+    updates["currentPlayerIndex"] = nextPlayerStateIndex;
+    updates["turnCount"] = (gameData.turnCount || 0) + 1;
+    updates["processingMove"] = false;
+    updates["sharedModalContent"] = { active: false };
     
     db.ref(`/games/${gameId}/state`).update(updates).then(() => {
       const nextPlayerName = players[nextId]?.name || "next player";
