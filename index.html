@@ -3079,11 +3079,6 @@ Industrial Age\tFuture steam punk gear\t500`;
             }
         }
 
-        // Original hideEvent function, renamed, to be called internally if needed
-        function originalHideEvent() {
-            eventDisplay.style.display = 'none';
-        }
-        
         // Show event display
         function showEvent(title, description) {
             const localEventDisplay = document.getElementById('event-display');
@@ -3126,22 +3121,6 @@ Industrial Age\tFuture steam punk gear\t500`;
             }
         }
 
-        // Original showEvent function, renamed, to be called internally if needed
-        function originalShowEvent(title, description) {
-            eventTitle.textContent = title;
-            eventDescription.innerHTML = description;
-            eventDisplay.style.display = 'block';
-            
-            // Reset event button
-            const eventButtons = document.getElementById('event-buttons');
-            eventButtons.innerHTML = '';
-            const okButton = document.createElement('button');
-            okButton.textContent = 'OK';
-            okButton.id = 'event-button';
-            okButton.onclick = hideEvent;
-            eventButtons.appendChild(okButton);
-        }
-        
         // Update inventory display
         function updateInventoryDisplay(playerIndexToShow = gameState.currentPlayerIndex) {
             const playerWhoseInventory = gameState.players[playerIndexToShow];
@@ -3321,7 +3300,7 @@ Industrial Age\tFuture steam punk gear\t500`;
                 // If this is a treasure reveal after landing on a square, move to next player
                 if (gameState.processingMove || window.itemModalFromSquareAction) {
                     window.itemModalFromSquareAction = false;
-                    setTimeout(nextPlayer, 500);
+                    scheduleAdvanceTurn(500);
                 }
             };
         }
@@ -4194,7 +4173,7 @@ Industrial Age\tFuture steam punk gear\t500`;
             if (currentPlayer.skipNextTurn) {
                 currentPlayer.skipNextTurn = false;
                 toast(`${currentPlayer.name} misses their turn!`);
-                setTimeout(() => nextPlayer(), 1500);
+                scheduleAdvanceTurn(1500);
                 return;
             }
             
@@ -4338,7 +4317,20 @@ Industrial Age\tFuture steam punk gear\t500`;
         // Re-entrancy guard: prevent multiple simultaneous turn transitions (window for cross-script access)
         window.turnTransitionInProgress = false;
 
-        // Function to move to the next player
+        /**
+         * MULTIPLAYER TURN FLOW (single source of truth: Firebase state.currentPlayerId)
+         * 1. Active player: currentPlayerId === clientId. Only this client may roll and resolve square actions.
+         * 2. When a square action is complete (modal OK, choice made, etc.), code must call nextPlayer().
+         * 3. nextPlayer() -> endTurn(): reads Firebase, validates currentPlayerId === clientId, writes next player.
+         * 4. Other clients: listenForTurn() sees currentPlayerId change -> show "Your Turn" or "Waiting for X".
+         * 5. Square actions must never advance the turn without calling nextPlayer() (or endGame()).
+         */
+        function scheduleAdvanceTurn(delayMs) {
+            var d = typeof delayMs === 'number' && delayMs >= 0 ? delayMs : 1000;
+            setTimeout(function() { nextPlayer(); }, d);
+        }
+
+        // Function to move to the next player (single entry point for "turn is over, advance").
         function nextPlayer() {
             if (window.turnTransitionInProgress) return;
             if (!gameState.players || gameState.players.length === 0) {
@@ -4361,9 +4353,6 @@ Industrial Age\tFuture steam punk gear\t500`;
             // Keep the current player centered until we show the transition modal
             centerOnPlayer(gameState.currentPlayerIndex, true);
             updatePlayerInfo(); // Update info to reflect the end of the current player's turn
-            
-            // Reset the turn transition modal shown flag for the next player
-            turnTransitionModalShown = false;
             
             if (gameId) {
                 // Multiplayer: End turn and update Firebase
@@ -4408,9 +4397,8 @@ Industrial Age\tFuture steam punk gear\t500`;
             if (doneCallback) doneCallback();
         }
 
-        // Track if the turn transition modal has been shown for the current turn
-let turnTransitionModalShown = false;
-let lastPlayerIdForTurnModal = null; // Tracks the Firebase currentPlayerId from the PREVIOUS state update
+        // For multiplayer: detect when it becomes "my turn" so we show "Your Turn" modal once per turn
+let lastPlayerIdForTurnModal = null;
 let sharedModalContentListener = null; // Listener for shared modal content
 
 // Function to display shared modal content for inactive players
@@ -4451,8 +4439,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
 
     turnTransitionOkButton.onclick = () => {
         turnTransitionModal.style.display = 'none';
-        // `turnTransitionModalShown` is already true, set by the caller (listenForTurn).
-        proceedWithTurn(player); // Pass the correct player object
+        proceedWithTurn(player);
     };
 
     turnTransitionModal.style.display = 'block';
@@ -4493,7 +4480,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         if (gameId) {
                             db.ref(`/games/${gameId}/state/players/${currentPlayerObj.id}/skipNextTurn`).set(false); // Use currentPlayerObj.id
                         }
-                        setTimeout(() => { nextPlayer(); }, 1500);
+                        scheduleAdvanceTurn(1500);
                         return;
                     }
                     rollButton.disabled = false;
@@ -4714,18 +4701,20 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
             
             if (!cellData) {
                 console.warn("No cell data found for player position, proceeding to next player.");
-                gameState.processingMove = false; // Reset flag if something went wrong
-                nextPlayer();
+                gameState.processingMove = false;
+                scheduleAdvanceTurn(0);
                 return;
             }
 
             const applyEffect = () => {
-                document.getElementById('cell-modal').style.display = 'none'; // Ensure cell modal is hidden
+                document.getElementById('cell-modal').style.display = 'none';
 
+                // Every case must eventually call scheduleAdvanceTurn(...) or endGame(), except
+                // Roll Again / Lucky Day / Twist "Roll again" which keep the same player.
                 switch (cellData.type) {
                     case 'Start':
                         toast(`${currentPlayer.name} is at the starting point.`);
-                        setTimeout(nextPlayer, 1000);
+                        scheduleAdvanceTurn(1000);
                         break;
                         
                     case 'Title':
@@ -4743,11 +4732,11 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         // Offer insurance for landing on Title, but only if not already offered for era change
                         if (!currentPlayer.offeredInsuranceThisTurn) {
                             offerInsuranceConditional(false, () => { // false indicates it's the standard Title square offer
-                                setTimeout(nextPlayer, 1000); // After insurance, proceed to next player
+                                scheduleAdvanceTurn(1000); // After insurance, proceed to next player
                             });
                         } else {
                             // Insurance was already offered due to era change, so just proceed to next player
-                            setTimeout(nextPlayer, 1000);
+                            scheduleAdvanceTurn(1000);
                         }
 
                         break;
@@ -4806,7 +4795,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                     if (gameId) {
                                         db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
                                     }
-                                    setTimeout(nextPlayer, 1000);
+                                    scheduleAdvanceTurn(1000);
                                 }
                                 updatePlayerInfo(); // Update treasures display
                             };
@@ -4822,14 +4811,14 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                 updatePlayerInfo(); // Ensure this is called to reflect any state changes if needed
                                 hideEvent();
                                 toast(`${currentPlayer.name} chose not to buy a treasure.`);
-                                setTimeout(nextPlayer, 1000);
+                                scheduleAdvanceTurn(1000);
                             };
                             treasureButtons.appendChild(noButton);
                             
                             return; // Return here as we'll handle next steps after selection
                         } else {
                             toast(`${currentPlayer.name} doesn't have enough credits (100 required) to buy a treasure.`);
-                            setTimeout(nextPlayer, 1000);
+                            scheduleAdvanceTurn(1000);
                         }
                         break;
                         
@@ -4851,7 +4840,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         if (!card) {
                             toast(`${currentPlayer.name} experienced a twist of fate, but no card was available in the ${cellData.era} era.`);
                             sounds.twistOfFate.stop();
-                            setTimeout(nextPlayer, 1000);
+                            scheduleAdvanceTurn(1000);
                             break;
                         }
 
@@ -4885,7 +4874,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             }
                             sounds.twistOfFate.stop();
                             if (card.type !== 'Roll again') {
-                                setTimeout(nextPlayer, 1500);
+                                scheduleAdvanceTurn(1500);
                             }
                             return;
                         }
@@ -4973,7 +4962,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             if (gameId && card.type === 'Collect') {
                                 db.ref(`/games/${gameId}/state/players/${currentPlayer.id}/credits`).set(currentPlayer.credits);
                             }
-                            setTimeout(nextPlayer, 1000);
+                            scheduleAdvanceTurn(1000);
                         };
                         twistButtons.appendChild(okButton);
                         break;
@@ -5054,7 +5043,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                     hideEvent();
                                     toast(`${currentPlayer.name} chose not to rob anyone.`);
                                     sounds.interaction.stop(); // Stop sound on skip
-                                    setTimeout(nextPlayer, 1000);
+                                    scheduleAdvanceTurn(1000);
                                 };
                                 eventButtons.appendChild(skipButton);
                                 
@@ -5062,12 +5051,12 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             } else {
                                 toast(`No players have any non-major treasures to steal!`);
                                 // No sound played, so no stop needed here
-                                setTimeout(nextPlayer, 1000);
+                                scheduleAdvanceTurn(1000);
                             }
                         } else {
                             toast(`${currentPlayer.name} has no one to rob!`);
                             // No sound played, so no stop needed here
-                            setTimeout(nextPlayer, 1000);
+                            scheduleAdvanceTurn(1000);
                         }
                         break;
                         
@@ -5111,7 +5100,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                     updatePlayerInfo();
                                     // Stop interaction sound
                                     sounds.interaction.stop();
-                                    setTimeout(nextPlayer, 1000);
+                                    scheduleAdvanceTurn(1000);
                                 };
                                 eventButtons.appendChild(button);
                             });
@@ -5124,7 +5113,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                 toast(`${currentPlayer.name} chose not to take vengeance.`);
                                 // Stop interaction sound
                                 sounds.interaction.stop();
-                                setTimeout(nextPlayer, 1000);
+                                scheduleAdvanceTurn(1000);
                             };
                             eventButtons.appendChild(skipButton);
                             
@@ -5133,7 +5122,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             toast(`${currentPlayer.name} has no one to take vengeance on!`);
                             // Stop interaction sound
                             sounds.interaction.stop();
-                            setTimeout(nextPlayer, 1000);
+                            scheduleAdvanceTurn(1000);
                         }
                         break;
                         
@@ -5179,7 +5168,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         stayButton.onclick = () => {
                             toast(`${currentPlayer.name} chose to stay in the current era.`);
                             hideEvent();
-                            setTimeout(nextPlayer, 1000);
+                            scheduleAdvanceTurn(1000);
                         };
                         eventButtons.appendChild(stayButton);
 
@@ -5201,7 +5190,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             toast(`${currentPlayer.name}'s insurance protected against Sudden Death!`);
                             currentPlayer.hasInsurance = false; // Consume insurance
                             updatePlayerInfo(); // Reflect change
-                            setTimeout(nextPlayer, 1500);
+                            scheduleAdvanceTurn(1500);
                         } else {
                             // No insurance
                             const creditsLost = currentPlayer.credits;
@@ -5231,7 +5220,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             
                             if (currentPlayer.isAI) {
                                 toast(eventMessageBase);
-                                setTimeout(nextPlayer, 2000);
+                                scheduleAdvanceTurn(2000);
                                 return; // AI doesn't need to click a modal.
                             }
 
@@ -5243,12 +5232,12 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                             if (okButton) {
                                 okButton.onclick = () => {
                                     hideEvent();
-                                    setTimeout(nextPlayer, 1000);
+                                    scheduleAdvanceTurn(1000);
                                 };
                             } else {
                                 // Fallback in case the button isn't found, to prevent a hard freeze.
                                 console.error("Sudden Death modal OK button not found. Moving to next player automatically.");
-                                setTimeout(nextPlayer, 2500);
+                                scheduleAdvanceTurn(2500);
                             }
                             return; // Wait for human interaction
                         }
@@ -5332,7 +5321,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                     okButton.onclick = () => {
                                         hideEvent();
                                         updatePlayerInfo();
-                                        setTimeout(nextPlayer, 1000);
+                                        scheduleAdvanceTurn(1000);
                                     };
                                     gamblingResultButtons.appendChild(okButton);
                                 }, 2000); // Wait for dice animation to complete
@@ -5347,7 +5336,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         skipButton.onclick = () => {
                             toast(`${currentPlayer.name} chose not to gamble.`);
                             hideEvent();
-                            setTimeout(nextPlayer, 1000);
+                            scheduleAdvanceTurn(1000);
                         };
                         gamblingButtons.appendChild(skipButton);
                         
@@ -5368,7 +5357,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         // Check if this era's major treasure has already been claimed
                         if (gameState.majorTreasuresClaimed[cellData.era]) {
                             toast(`${currentPlayer.name} found the Major Treasure spot, but it has already been claimed!`);
-                            setTimeout(nextPlayer, 1000);
+                            scheduleAdvanceTurn(1000);
                             break;
                         }
                         
@@ -5433,7 +5422,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         
                         if (currentPlayer.isAI) {
                             toast(`${currentPlayer.name} encountered ${hazardName}! They will lose their next turn.`);
-                            setTimeout(nextPlayer, 1500);
+                            scheduleAdvanceTurn(1500);
                             return;
                         }
                         
@@ -5454,7 +5443,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         okButtonHazard.onclick = () => {
                             hideEvent();
                             updatePlayerInfo(); // Update UI before moving to next player
-                            setTimeout(nextPlayer, 1000);
+                            scheduleAdvanceTurn(1000);
                         };
                         hazardEventButtons.appendChild(okButtonHazard);
                         
@@ -5616,7 +5605,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                         okButton.onclick = () => {
                                             hideEvent();
                                             updatePlayerInfo();
-                                            setTimeout(nextPlayer, 1000);
+                                            scheduleAdvanceTurn(1000);
                                         };
                                         eventButtons.appendChild(okButton);
                                     };
@@ -5629,18 +5618,18 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                 skipButton.onclick = () => {
                                     hideEvent();
                                     toast(`${currentPlayer.name} chose not to duel anyone.`);
-                                    setTimeout(nextPlayer, 1000);
+                                    scheduleAdvanceTurn(1000);
                                 };
                                 eventButtons.appendChild(skipButton);
                                 
                                 return; // Return here as we'll handle next steps after selection
                             } else {
                                 toast(`No players have treasures to duel for!`);
-                                setTimeout(nextPlayer, 1000);
+                                scheduleAdvanceTurn(1000);
                             }
                         } else {
                             toast(`${currentPlayer.name} has no one to duel!`);
-                            setTimeout(nextPlayer, 1000);
+                            scheduleAdvanceTurn(1000);
                         }
                         break;
                         
@@ -5683,7 +5672,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         
                         updatePlayerInfo(); // Update UI
                         toast(collectedMessage);
-                        setTimeout(nextPlayer, 1000);
+                        scheduleAdvanceTurn(1000);
                         break;
                         
                     case 'Roll Again':
@@ -5735,7 +5724,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                     if (actualTreasureIndex === -1) { 
                                          toast(`Error: Could not find ${treasure.title} in your inventory to barter.`);
                                          hideEvent();
-                                         setTimeout(nextPlayer, 1000);
+                                         scheduleAdvanceTurn(1000);
                                          return;
                                     }
                                     const tradedOutTreasure = currentPlayer.treasures.splice(actualTreasureIndex, 1)[0];
@@ -5775,7 +5764,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                         }
                                         updatePlayerInfo();
                                         sounds.interaction.stop(); // Stop sound here as well
-                                        setTimeout(nextPlayer, 1000);
+                                        scheduleAdvanceTurn(1000);
                                     }
                                 };
                                 eventButtons.appendChild(button);
@@ -5788,7 +5777,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                 hideEvent();
                                 toast(`${currentPlayer.name} chose not to barter.`);
                                 sounds.interaction.stop(); // Stop sound on skip
-                                setTimeout(nextPlayer, 1000);
+                                scheduleAdvanceTurn(1000);
                             };
                             eventButtons.appendChild(skipButton);
                             
@@ -5796,7 +5785,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         } else {
                             toast(`${currentPlayer.name} has no non-major treasures to barter with.`);
                             // No sound played, so no stop needed here
-                            setTimeout(nextPlayer, 1000);
+                            scheduleAdvanceTurn(1000);
                         }
                         break;
                         
@@ -5809,7 +5798,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         
                     default:
                         toast(`${currentPlayer.name} landed on ${cellData.type}.`);
-                        setTimeout(nextPlayer, 1000);
+                        scheduleAdvanceTurn(1000);
                         break;
                 }
             };
@@ -6677,42 +6666,30 @@ function listenForTurn() {
         gameState.currentPlayerIndex = currentStatePlayerIndex;
       }
       
+      // MULTIPLAYER TURN UI: Firebase currentPlayerId is the single source of truth.
       const isMyClientTurn = currentPlayerId === clientId;
-      // A "new turn" for me means the currentPlayerIdFromFirebase just changed TO my clientId
-      const isNewTurnForMyClient = isMyClientTurn && (lastPlayerIdForTurnModal !== currentPlayerId);
+      // Show "Your Turn" exactly once per turn: when currentPlayerId just became me (last stored id !== current).
+      const shouldShowYourTurnModal = isMyClientTurn && (lastPlayerIdForTurnModal !== currentPlayerId);
 
       if (isMyClientTurn) {
           document.getElementById("waiting-for-player-modal").style.display = "none";
-          rollButton.disabled = gameState.processingMove; // General enablement, proceedWithTurn finalizes this
+          rollButton.disabled = gameState.processingMove;
           inventoryButton.disabled = false;
 
-          if (isNewTurnForMyClient && !turnTransitionModalShown) {
-              // New turn for this client: ensure "Your Turn" always shows (don't block on other modals)
+          if (shouldShowYourTurnModal) {
               const myPlayerObject = gameState.players.find(p => p.id === clientId);
               if (myPlayerObject) {
-                  // Hide any modals that might block the turn transition so the next player always gets "Your Turn"
                   document.getElementById("event-display").style.display = "none";
                   document.getElementById("cell-modal").style.display = "none";
                   document.getElementById("read-only-event-modal").style.display = "none";
-                  // Only skip if pause or rules are open (user chose to open them)
                   const pauseOpen = document.getElementById("pause-menu-modal").style.display === "flex";
                   const rulesOpen = document.getElementById("rules-modal").style.display !== "none" && document.getElementById("rules-modal").style.display !== "";
                   if (!pauseOpen && !rulesOpen) {
-                      turnTransitionModalShown = true;
                       showTurnTransitionModal(myPlayerObject);
                   }
               }
-          } else if (!isNewTurnForMyClient && !gameState.processingMove && document.getElementById("turn-transition-modal").style.display === 'none') {
-              // My turn, modal already handled (not a new turn start context), and game not processing
-              // Ensure roll button is appropriately enabled (usually by proceedWithTurn or if no modal involved).
-              rollButton.disabled = gameState.processingMove; // Re-evaluate roll button if it's my turn but not a 'new' turn event
           }
-      } else { // Not my client's turn
-          // If it WAS my turn (lastPlayerIdForTurnModal matched my clientId) and now it's not (isMyClientTurn is false)
-          if (lastPlayerIdForTurnModal === clientId && clientId !== null) { // clientId !== null is a safeguard
-              turnTransitionModalShown = false; // UNLOCK: Reset the flag for the next time it's my turn.
-          }
-          // Show waiting modal for other player, disable my controls
+      } else {
           document.getElementById("turn-transition-modal").style.display = "none";
           const waitingModalElement = document.getElementById("waiting-for-player-modal");
           const waitingMessageElement = document.getElementById("waiting-for-player-message");
@@ -6720,12 +6697,12 @@ function listenForTurn() {
           waitingModalElement.style.display = "block";
           rollButton.disabled = true;
           inventoryButton.disabled = false;
-          if (gameState.players[gameState.currentPlayerIndex]) { // Check if player exists before centering
-               centerOnPlayer(gameState.currentPlayerIndex, true);
+          if (gameState.players[gameState.currentPlayerIndex]) {
+              centerOnPlayer(gameState.currentPlayerIndex, true);
           }
       }
       updateEndTurnButtonVisibility(isMyClientTurn);
-      lastPlayerIdForTurnModal = currentPlayerId; // Store for the next comparison.
+      lastPlayerIdForTurnModal = currentPlayerId;
     }
   };
   ref.on("value", turnStateListenerCallback);
@@ -6754,24 +6731,36 @@ function updateInventory(treasure) {
 }
 
 function endTurn(onComplete) {
+  if (!gameId) {
+    if (onComplete) onComplete();
+    return;
+  }
   db.ref(`/games/${gameId}/state`).once("value").then(snapshot => {
     const gameData = snapshot.val() || {};
     const players = gameData.players || {};
-    
+    const firebaseCurrentPlayerId = gameData.currentPlayerId;
+
+    // MULTIPLAYER TURN RULE: Only the client whose turn it is may advance the turn.
+    // If someone else's turn is in Firebase, this client must not write (avoids race / wrong caller).
+    if (firebaseCurrentPlayerId !== clientId) {
+      console.warn("endTurn: not this client's turn (Firebase has " + firebaseCurrentPlayerId + "), skipping write");
+      if (onComplete) onComplete();
+      return;
+    }
+
     // Use playersOrder from Firebase for reliable turn sequence (stored at game start)
-    // Fallback: build order from slotIndex if playersOrder missing (legacy games)
     let playersOrder = gameData.playersOrder;
     if (!playersOrder || playersOrder.length === 0) {
-      playersOrder = Object.keys(players).sort((a, b) => 
+      playersOrder = Object.keys(players).sort((a, b) =>
         ((players[a]?.slotIndex ?? 999) - (players[b]?.slotIndex ?? 999)));
     }
-    
+
     if (playersOrder.length === 0) {
       console.error("No players in turn order");
       if (onComplete) onComplete();
       return;
     }
-    
+
     const currentIndex = playersOrder.indexOf(clientId);
     if (currentIndex === -1) {
       console.error("Current player not found in players list", clientId, playersOrder);
