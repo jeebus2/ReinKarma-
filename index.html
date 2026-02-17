@@ -4356,7 +4356,16 @@ Industrial Age\tFuture steam punk gear\t500`;
             
             if (gameId) {
                 // Multiplayer: End turn and update Firebase
-                endTurn(() => { window.turnTransitionInProgress = false; });
+                var turnTransitionTimeout = setTimeout(function() {
+                    if (window.turnTransitionInProgress) {
+                        console.warn("Turn transition timeout - clearing guard so End Turn can be used.");
+                        window.turnTransitionInProgress = false;
+                    }
+                }, 12000);
+                endTurn(function() {
+                    clearTimeout(turnTransitionTimeout);
+                    window.turnTransitionInProgress = false;
+                });
             } else {
                 // Single player: Advance to next player, skipping any with skipNextTurn
                 advanceToNextPlayerSingle(() => {
@@ -4702,6 +4711,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
             if (!cellData) {
                 console.warn("No cell data found for player position, proceeding to next player.");
                 gameState.processingMove = false;
+                if (gameId) db.ref(`/games/${gameId}/state/processingMove`).set(false);
                 scheduleAdvanceTurn(0);
                 return;
             }
@@ -4886,18 +4896,17 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
 
                         if (card.type === 'Roll again') {
                             toast(`${currentPlayer.name} gets to roll again: ${card.description}`);
-                            // The modal might still be visible briefly, or hideEvent can be called sooner
                             hideEvent(); 
-                            sounds.twistOfFate.stop(); // Stop the sound before setting up the re-roll
+                            sounds.twistOfFate.stop();
                             setTimeout(() => {
-                                gameState.processingMove = false; // Allow next roll
+                                gameState.processingMove = false;
+                                if (gameId) db.ref(`/games/${gameId}/state/processingMove`).set(false);
                                 rollButton.disabled = false;
                                 if (currentPlayer.isAI) {
-                                    setTimeout(handleAITurn, 1000); // AI handles its re-roll
+                                    setTimeout(handleAITurn, 1000);
                                 } else {
                                     toast(`${currentPlayer.name}, it's your turn to roll again!`);
                                 }
-                                // Current player takes another turn, so DO NOT call nextPlayer()
                             }, 1500);
                             // updatePlayerInfo(); // Only if credits could have changed before this point in a 'Roll Again' card
                             return; // Critical: exit cell processing for this turn.
@@ -5155,9 +5164,8 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                                 hideEvent();
                                 updatePlayerInfo();
 
-                                // The player has landed on a new square (Title), so process its effect.
-                                gameState.processingMove = false; // Allow processCellEffect to run
-                                processCellEffect(); // This will handle the Title square logic itself
+                                // Still same turn: resolve the Title square (insurance then scheduleAdvanceTurn).
+                                processCellEffect();
                             };
                             eventButtons.appendChild(eraButton);
                         });
@@ -5676,17 +5684,14 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         break;
                         
                     case 'Roll Again':
-                        // Roll again immediately
                         toast(`${currentPlayer.name} gets to roll again!`);
                         setTimeout(() => {
-                            gameState.processingMove = false; // Reset processing flag
-                            rollButton.disabled = false; // Enable roll button
-                            
-                            // If AI player, trigger their turn
+                            gameState.processingMove = false;
+                            if (gameId) db.ref(`/games/${gameId}/state/processingMove`).set(false);
+                            rollButton.disabled = false;
                             if (currentPlayer.isAI) {
                                 setTimeout(handleAITurn, 1000);
                             } else {
-                                // For human player, just show a message
                                 toast(`${currentPlayer.name}, roll again!`);
                             }
                         }, 1000);
