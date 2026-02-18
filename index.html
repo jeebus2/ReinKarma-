@@ -6684,8 +6684,8 @@ function listenForTurn() {
       // MULTIPLAYER TURN UI: Firebase currentPlayerId is the single source of truth.
       const isMyClientTurn = currentPlayerId === clientId;
       const turnCount = gameData.turnCount || 0;
-      // Show "Your Turn" when it's my turn AND (current player just changed to me, OR same player but turnCount increased e.g. after "lose a turn" skip)
-      const shouldShowYourTurnModal = isMyClientTurn && (
+      // Show "Your Turn" only at the START of a turn (before roll). Never re-show after they've rolled (processingMove would be true).
+      const shouldShowYourTurnModal = isMyClientTurn && !gameState.processingMove && (
           lastPlayerIdForTurnModal !== currentPlayerId || turnCount !== lastShownTurnCountForModal
       );
 
@@ -6736,6 +6736,7 @@ function tryShowYourTurnModalIfNeeded() {
   var currentPlayer = gameState.players[gameState.currentPlayerIndex];
   if (!currentPlayer || currentPlayer.id !== clientId) return;
   if (document.getElementById("turn-transition-modal").style.display === "block") return;
+  if (gameState.processingMove) return; // Already rolled this turn; don't show "Your Turn" again
   var turnCount = gameState.turnCount || 0;
   if (lastShownTurnCountForModal === turnCount) return;
   var myPlayerObject = gameState.players.find(function(p) { return p.id === clientId; });
