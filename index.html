@@ -4406,10 +4406,11 @@ Industrial Age\tFuture steam punk gear\t500`;
             if (doneCallback) doneCallback();
         }
 
-        // For multiplayer: detect when it becomes "my turn" so we show "Your Turn" modal once per turn
+        // For multiplayer: show "Your Turn" only when a NEW turn starts (not on every state update during the turn).
 let lastPlayerIdForTurnModal = null;
-var lastShownTurnCountForModal = -1; // So "Your Turn" shows again when same player gets turn after a skip (turnCount increases)
-let sharedModalContentListener = null; // Listener for shared modal content
+var lastShownTurnCountForModal = -1;
+var lastSeenTurnCountByListener = -1; // Ignore stale snapshots so we don't re-show "Your Turn" mid-turn
+let sharedModalContentListener = null;
 
 // Function to display shared modal content for inactive players
 function displaySharedModal(modalData, currentPlayerIdFromState) {
@@ -4476,10 +4477,7 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
             
             // Offer initial insurance if it's their first turn and not yet offered
             if (!currentPlayerObj.initialInsuranceOffered) {
-                // Update the flag in Firebase for multiplayer
-                if (gameId) {
-                    db.ref(`/games/${gameId}/state/players/${clientId}/initialInsuranceOffered`).set(true);
-                }
+                // Set locally only here; write to Firebase when user responds (avoids listener re-running "my turn" UI while modal is open)
                 currentPlayerObj.initialInsuranceOffered = true;
                 const insuranceCost = 500;
 
@@ -4516,11 +4514,12 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                         currentPlayerObj.credits -= insuranceCost;
                         currentPlayerObj.hasInsurance = true;
                         
-                        // Update in Firebase for multiplayer
+                        // Update in Firebase for multiplayer (incl. initialInsuranceOffered so listener doesn't re-apply turn UI until after we're done)
                         if (gameId) {
                             db.ref(`/games/${gameId}/state/players/${clientId}`).update({
                                 credits: currentPlayerObj.credits,
-                                hasInsurance: true
+                                hasInsurance: true,
+                                initialInsuranceOffered: true
                             });
                         }
                         
@@ -4539,6 +4538,9 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
                 noButton.style.backgroundColor = '#F44336';
                 noButton.onclick = () => {
                     toast(`${currentPlayerObj.name} declined initial insurance.`);
+                    if (gameId) {
+                        db.ref(`/games/${gameId}/state/players/${clientId}/initialInsuranceOffered`).set(true);
+                    }
                     hideEvent();
                     updatePlayerInfo();
                     startPlayerTurnLogic(currentPlayerObj); // Proceed with turn logic, passing the player object
@@ -6534,11 +6536,17 @@ function listenForTurn() {
     turnStateListenerRef = null;
     turnStateListenerCallback = null;
   }
+  lastSeenTurnCountByListener = -1; // accept first snapshot when joining/starting a game
   turnStateListenerRef = ref;
   turnStateListenerCallback = function(snapshot) {
     const gameData = snapshot.val() || {};
     const currentPlayerId = gameData.currentPlayerId;
     const players = gameData.players || {};
+    // Ignore stale (out-of-order) snapshots so we don't re-show "Your Turn" mid-turn
+    const snapshotTurnCount = typeof gameData.turnCount === "number" ? gameData.turnCount : -1;
+    if (lastSeenTurnCountByListener >= 0 && snapshotTurnCount < lastSeenTurnCountByListener) {
+      return;
+    }
     if (currentPlayerId == null && gameData.gameStarted) {
       return;
     }
@@ -6714,6 +6722,9 @@ function listenForTurn() {
       }
       updateEndTurnButtonVisibility(isMyClientTurn);
       lastPlayerIdForTurnModal = currentPlayerId;
+      if (snapshotTurnCount >= 0) {
+        lastSeenTurnCountByListener = Math.max(lastSeenTurnCountByListener, snapshotTurnCount);
+      }
     }
   };
   ref.on("value", turnStateListenerCallback);
