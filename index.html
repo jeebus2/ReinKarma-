@@ -6786,12 +6786,14 @@ function endTurn(onComplete) {
       return;
     }
 
-    // Use playersOrder from Firebase for reliable turn sequence (stored at game start)
+    // Use playersOrder from Firebase for reliable turn sequence (stored at game start),
+    // but normalize to currently active players to avoid selecting missing IDs.
     let playersOrder = gameData.playersOrder;
     if (!playersOrder || playersOrder.length === 0) {
       playersOrder = Object.keys(players).sort((a, b) =>
         ((players[a]?.slotIndex ?? 999) - (players[b]?.slotIndex ?? 999)));
     }
+    playersOrder = (playersOrder || []).filter(id => !!players[id]);
 
     if (playersOrder.length === 0) {
       console.error("No players in turn order");
@@ -6799,9 +6801,10 @@ function endTurn(onComplete) {
       return;
     }
 
-    const currentIndex = playersOrder.indexOf(clientId);
+    // Derive current index from Firebase currentPlayerId (single source of truth).
+    const currentIndex = playersOrder.indexOf(firebaseCurrentPlayerId);
     if (currentIndex === -1) {
-      console.error("Current player not found in players list", clientId, playersOrder);
+      console.error("Current player not found in players list", firebaseCurrentPlayerId, playersOrder);
       if (onComplete) onComplete();
       return;
     }
@@ -6815,7 +6818,11 @@ function endTurn(onComplete) {
     while (checks < playersToCheck) {
       const nextId = playersOrder[nextIndex];
       const nextPlayerData = players[nextId];
-      if (!nextPlayerData) break;
+      if (!nextPlayerData) {
+        nextIndex = (nextIndex + 1) % playersOrder.length;
+        checks++;
+        continue;
+      }
       
       if (nextPlayerData.skipNextTurn) {
         updates[`players/${nextId}/skipNextTurn`] = false;
@@ -6852,6 +6859,7 @@ function endTurn(onComplete) {
     updates["turnCount"] = (gameData.turnCount || 0) + 1;
     updates["processingMove"] = false;
     updates["sharedModalContent"] = { active: false };
+    updates["playersOrder"] = playersOrder;
     
     db.ref(`/games/${gameId}/state`).update(updates).then(() => {
       const nextPlayerName = players[nextId]?.name || "next player";
