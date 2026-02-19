@@ -4339,9 +4339,14 @@ Industrial Age\tFuture steam punk gear\t500`;
             }
             window.turnTransitionInProgress = true;
             
-            // Reset processing flag
-            gameState.processingMove = false;
-            if (gameId) db.ref(`/games/${gameId}/state/processingMove`).set(false);
+            // During multiplayer handoff, keep input blocked until endTurn() atomically
+            // writes next currentPlayerId + processingMove=false in one update.
+            if (gameId) {
+                gameState.processingMove = true;
+                rollButton.disabled = true;
+            } else {
+                gameState.processingMove = false;
+            }
             
             // Check if game is over (someone reached Nirvana)
             if (gameState.players.some(p => p.position === 169)) {
