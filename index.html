@@ -6778,108 +6778,105 @@ function endTurn(onComplete) {
     if (onComplete) onComplete();
     return;
   }
-  db.ref(`/games/${gameId}/state`).once("value").then(snapshot => {
-    const gameData = snapshot.val() || {};
-    const players = gameData.players || {};
-    const firebaseCurrentPlayerId = gameData.currentPlayerId;
+  const stateRef = db.ref(`/games/${gameId}/state`);
 
-    // MULTIPLAYER TURN RULE: Only the client whose turn it is may advance the turn.
-    // If someone else's turn is in Firebase, this client must not write (avoids race / wrong caller).
+  // Hide any open modals before ending turn
+  document.getElementById("turn-transition-modal").style.display = "none";
+  document.getElementById("event-display").style.display = "none";
+  document.getElementById("cell-modal").style.display = "none";
+  document.getElementById("item-modal").style.display = "none";
+  document.getElementById("inventory").style.display = "none";
+
+  stateRef.transaction(currentState => {
+    const state = currentState || {};
+    const players = state.players || {};
+    const firebaseCurrentPlayerId = state.currentPlayerId;
+
+    // Only active player can advance; abort transaction if not this client's turn.
     if (firebaseCurrentPlayerId !== clientId) {
-      console.warn("endTurn: not this client's turn (Firebase has " + firebaseCurrentPlayerId + "), skipping write");
-      if (onComplete) onComplete();
       return;
     }
 
-    // Use playersOrder from Firebase for reliable turn sequence (stored at game start),
-    // but normalize to currently active players to avoid selecting missing IDs.
-    let playersOrder = gameData.playersOrder;
-    if (!playersOrder || playersOrder.length === 0) {
+    // Normalize turn order to active players each time.
+    let playersOrder = state.playersOrder;
+    if (!Array.isArray(playersOrder) || playersOrder.length === 0) {
       playersOrder = Object.keys(players).sort((a, b) =>
         ((players[a]?.slotIndex ?? 999) - (players[b]?.slotIndex ?? 999)));
     }
     playersOrder = (playersOrder || []).filter(id => !!players[id]);
-
     if (playersOrder.length === 0) {
-      console.error("No players in turn order");
-      if (onComplete) onComplete();
       return;
     }
 
-    // Derive current index from Firebase currentPlayerId (single source of truth).
     const currentIndex = playersOrder.indexOf(firebaseCurrentPlayerId);
     if (currentIndex === -1) {
-      console.error("Current player not found in players list", firebaseCurrentPlayerId, playersOrder);
-      if (onComplete) onComplete();
       return;
     }
-    
-    // Find next player, skipping any with skipNextTurn (consume their skip)
+
+    // Find next player, consuming skipNextTurn flags.
     let nextIndex = (currentIndex + 1) % playersOrder.length;
-    const playersToCheck = playersOrder.length;
     let checks = 0;
-    const updates = {};
-    
-    while (checks < playersToCheck) {
-      const nextId = playersOrder[nextIndex];
-      const nextPlayerData = players[nextId];
-      if (!nextPlayerData) {
+    while (checks < playersOrder.length) {
+      const candidateId = playersOrder[nextIndex];
+      const candidate = players[candidateId];
+      if (!candidate) {
         nextIndex = (nextIndex + 1) % playersOrder.length;
         checks++;
         continue;
       }
-      
-      if (nextPlayerData.skipNextTurn) {
-        updates[`players/${nextId}/skipNextTurn`] = false;
+      if (candidate.skipNextTurn) {
+        if (state.players && state.players[candidateId]) {
+          state.players[candidateId].skipNextTurn = false;
+        }
         nextIndex = (nextIndex + 1) % playersOrder.length;
         checks++;
         continue;
       }
       break;
     }
-    
+
     const nextId = playersOrder[nextIndex];
-    
-    // Find the correct index in gameState.players array (by slotIndex)
-    let nextPlayerStateIndex = gameState.players.findIndex(p => p.id === nextId);
-    if (nextPlayerStateIndex === -1 && players[nextId]) {
-      nextPlayerStateIndex = gameState.players.findIndex(p => 
-        p.slotIndex === players[nextId].slotIndex);
+    if (!nextId || !players[nextId]) {
+      return;
     }
-    if (nextPlayerStateIndex === -1) {
-      nextPlayerStateIndex = nextIndex;
+
+    // Map next player ID to state index by slot order, with fallback.
+    const liveOrderedIds = Object.keys(players)
+      .filter(id => !!players[id])
+      .sort((a, b) => ((players[a]?.slotIndex ?? 999) - (players[b]?.slotIndex ?? 999)));
+    const nextPlayerStateIndex = Math.max(0, liveOrderedIds.indexOf(nextId));
+
+    state.currentPlayerId = nextId;
+    state.currentPlayerIndex = nextPlayerStateIndex >= 0 ? nextPlayerStateIndex : nextIndex;
+    state.turnCount = (state.turnCount || 0) + 1;
+    state.processingMove = false;
+    state.sharedModalContent = { active: false };
+    state.playersOrder = playersOrder;
+
+    return state;
+  }, (error, committed, snapshot) => {
+    if (error) {
+      console.error("endTurn transaction failed:", error);
+      if (onComplete) onComplete();
+      return;
     }
-    
-    gameState.processingMove = false;
-    
-    // Hide any open modals before ending turn
-    document.getElementById("turn-transition-modal").style.display = "none";
-    document.getElementById("event-display").style.display = "none";
-    document.getElementById("cell-modal").style.display = "none";
-    document.getElementById("item-modal").style.display = "none";
-    document.getElementById("inventory").style.display = "none";
-    
-    updates["currentPlayerId"] = nextId;
-    updates["currentPlayerIndex"] = nextPlayerStateIndex;
-    updates["turnCount"] = (gameData.turnCount || 0) + 1;
-    updates["processingMove"] = false;
-    updates["sharedModalContent"] = { active: false };
-    updates["playersOrder"] = playersOrder;
-    
-    db.ref(`/games/${gameId}/state`).update(updates).then(() => {
-      const nextPlayerName = players[nextId]?.name || "next player";
-      const waitingModal = document.getElementById("waiting-for-player-modal");
-      const waitingMessage = document.getElementById("waiting-for-player-message");
-      waitingMessage.textContent = `Waiting for ${nextPlayerName}'s turn...`;
-      waitingModal.style.display = "block";
-      rollButton.disabled = true;
+
+    if (!committed) {
+      // Common abort reasons: not this client's turn anymore, or state invalid.
+      console.warn("endTurn transaction not committed (likely stale turn owner).");
       if (onComplete) onComplete();
-    }).catch(err => {
-      console.error("endTurn Firebase update failed:", err);
-      if (onComplete) onComplete();
-    });
-  }).catch(err => {
-    console.error("endTurn read failed:", err);
+      return;
+    }
+
+    const updatedState = snapshot && snapshot.val ? (snapshot.val() || {}) : {};
+    const players = updatedState.players || {};
+    const nextId = updatedState.currentPlayerId;
+    const nextPlayerName = (nextId && players[nextId] && players[nextId].name) ? players[nextId].name : "next player";
+    const waitingModal = document.getElementById("waiting-for-player-modal");
+    const waitingMessage = document.getElementById("waiting-for-player-message");
+    waitingMessage.textContent = `Waiting for ${nextPlayerName}'s turn...`;
+    waitingModal.style.display = "block";
+    rollButton.disabled = true;
     if (onComplete) onComplete();
   });
 }
