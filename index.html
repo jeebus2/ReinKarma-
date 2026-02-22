@@ -5839,9 +5839,19 @@ function showTurnTransitionModal(player) { // Player object for whom the turn is
 <script>
 let gameId = localStorage.getItem("reinkarma_game_id");
 let clientId = localStorage.getItem("reinkarma_client_id");
+let multiplayerRuntimeInitialized = false;
 if (!clientId) {
   clientId = 'client-' + Math.random().toString(36).substr(2, 9);
   localStorage.setItem("reinkarma_client_id", clientId);
+}
+
+function ensureMultiplayerRuntimeInitialized() {
+  if (multiplayerRuntimeInitialized) return;
+  multiplayerRuntimeInitialized = true;
+  listenForTurn();
+  restrictEventsToCurrentPlayer();
+  showPlayerIdentity();
+  enforceOnlineCheck();
 }
 
 function joinGame(playerName, isHost = false) {
@@ -5970,10 +5980,7 @@ function renderLobby() {
     if (gameState.started) {
       document.getElementById("lobby-screen").style.display = "none";
       if (waitingModal) waitingModal.style.display = "none";
-      listenForTurn();
-      restrictEventsToCurrentPlayer();
-      showPlayerIdentity();
-      enforceOnlineCheck();
+      ensureMultiplayerRuntimeInitialized();
     } else {
       // Show waiting modal if game exists but hasn't started yet
       if (waitingModal && clientId !== hostId) {
@@ -6309,18 +6316,28 @@ function showPlayerIdentity() {
 
 // ✅ FIX 7: Prevent actions if player is disconnected mid-turn
 function enforceOnlineCheck() {
-  db.ref(`/games/${gameId}/state/currentPlayerId`).on("value", snapshot => {
-    const currentId = snapshot.val();
-    if (currentId === clientId) {
-      db.ref(`.info/connected`).on("value", snap => {
-        if (!snap.val()) {
-          alert("You've lost connection. You will be unable to take your turn.");
-          document.getElementById("roll-button").disabled = true;
-          document.getElementById("inventory-button").disabled = true;
-        }
-      });
+  if (onlineCurrentTurnRef && onlineCurrentTurnCallback) {
+    onlineCurrentTurnRef.off("value", onlineCurrentTurnCallback);
+  }
+  if (onlineConnectedRef && onlineConnectedCallback) {
+    onlineConnectedRef.off("value", onlineConnectedCallback);
+  }
+
+  onlineCurrentTurnRef = db.ref(`/games/${gameId}/state/currentPlayerId`);
+  onlineCurrentTurnCallback = snapshot => {
+    onlineCheckIsMyTurn = snapshot.val() === clientId;
+  };
+  onlineCurrentTurnRef.on("value", onlineCurrentTurnCallback);
+
+  onlineConnectedRef = db.ref(`.info/connected`);
+  onlineConnectedCallback = snap => {
+    if (!snap.val() && onlineCheckIsMyTurn) {
+      alert("You've lost connection. You will be unable to take your turn.");
+      document.getElementById("roll-button").disabled = true;
+      document.getElementById("inventory-button").disabled = true;
     }
-  });
+  };
+  onlineConnectedRef.on("value", onlineConnectedCallback);
 }
 
 async function reconnectToGame() {
@@ -6349,8 +6366,7 @@ async function reconnectToGame() {
     if (gameData.started) {
       // Game is in progress
       document.getElementById("lobby-screen").style.display = "none";
-      listenForTurn();
-      restrictEventsToCurrentPlayer();
+      ensureMultiplayerRuntimeInitialized();
       restorePlayerState();
       toast("Reconnected to game in progress");
     } else {
@@ -6377,9 +6393,20 @@ async function reconnectToGame() {
 <script>
 // Track the last player ID to detect actual turn changes for event restriction
 let lastRestrictedPlayerId = null;
+let restrictTurnRef = null;
+let restrictTurnCallback = null;
+let onlineCurrentTurnRef = null;
+let onlineCurrentTurnCallback = null;
+let onlineConnectedRef = null;
+let onlineConnectedCallback = null;
+let onlineCheckIsMyTurn = false;
 
 function restrictEventsToCurrentPlayer() {
-  db.ref(`/games/${gameId}/state/currentPlayerId`).on("value", snapshot => {
+  if (restrictTurnRef && restrictTurnCallback) {
+    restrictTurnRef.off("value", restrictTurnCallback);
+  }
+  restrictTurnRef = db.ref(`/games/${gameId}/state/currentPlayerId`);
+  restrictTurnCallback = snapshot => {
     const currentPlayerId = snapshot.val();
     const isMyTurn = currentPlayerId === clientId;
     const isTurnChange = lastRestrictedPlayerId !== currentPlayerId;
@@ -6396,7 +6423,8 @@ function restrictEventsToCurrentPlayer() {
     rollButton.disabled = !isMyTurn || gameState.processingMove;
     inventoryButton.disabled = false; // Always allow viewing inventory
     updateEndTurnButtonVisibility(isMyTurn);
-  });
+  };
+  restrictTurnRef.on("value", restrictTurnCallback);
 }
 
 // End Turn button - safety valve to force-advance when turn logic gets stuck
