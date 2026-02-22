@@ -4314,8 +4314,10 @@ Industrial Age\tFuture steam punk gear\t500`;
             return cell ? cell.type : 'Unknown';
         }
         
-        // Re-entrancy guard: prevent multiple simultaneous turn transitions (window for cross-script access)
+        // Re-entrancy + timer guards for deterministic turn transitions.
         window.turnTransitionInProgress = false;
+        window.pendingAdvanceTimerId = null;
+        window.pendingAdvanceTurnToken = null;
 
         /**
          * MULTIPLAYER TURN FLOW (single source of truth: Firebase state.currentPlayerId)
@@ -4325,18 +4327,58 @@ Industrial Age\tFuture steam punk gear\t500`;
          * 4. Other clients: listenForTurn() sees currentPlayerId change -> show "Your Turn" or "Waiting for X".
          * 5. Square actions must never advance the turn without calling nextPlayer() (or endGame()).
          */
+        function getTurnTokenFromState(playerId, turnCount) {
+            const p = playerId || "";
+            const t = Number.isFinite(turnCount) ? turnCount : (gameState.turnCount || 0);
+            return `${p}|${t}`;
+        }
+
+        function getCurrentTurnContext() {
+            const currentPlayerObj = gameState.players && gameState.players[gameState.currentPlayerIndex];
+            const playerId = gameId ? (currentPlayerObj ? currentPlayerObj.id : null) : null;
+            const turnCount = Number.isFinite(gameState.turnCount) ? gameState.turnCount : 0;
+            return { playerId, turnCount, token: getTurnTokenFromState(playerId, turnCount) };
+        }
+
+        function clearPendingAdvanceTimer() {
+            if (window.pendingAdvanceTimerId) {
+                clearTimeout(window.pendingAdvanceTimerId);
+                window.pendingAdvanceTimerId = null;
+            }
+            window.pendingAdvanceTurnToken = null;
+        }
+
         function scheduleAdvanceTurn(delayMs) {
             var d = typeof delayMs === 'number' && delayMs >= 0 ? delayMs : 1000;
-            setTimeout(function() { nextPlayer(); }, d);
+            const turnCtx = getCurrentTurnContext();
+            // Keep one pending advance per turn to prevent duplicate/stale nextPlayer calls.
+            if (window.pendingAdvanceTurnToken === turnCtx.token && window.pendingAdvanceTimerId) {
+                return;
+            }
+            clearPendingAdvanceTimer();
+            window.pendingAdvanceTurnToken = turnCtx.token;
+            window.pendingAdvanceTimerId = setTimeout(function() {
+                const expected = turnCtx;
+                clearPendingAdvanceTimer();
+                nextPlayer(expected);
+            }, d);
         }
 
         // Function to move to the next player (single entry point for "turn is over, advance").
-        function nextPlayer() {
+        function nextPlayer(expectedTurnContext) {
             if (window.turnTransitionInProgress) return;
             if (!gameState.players || gameState.players.length === 0) {
                 console.warn("nextPlayer: No players in game");
                 return;
             }
+            // Ignore stale delayed callbacks from prior turns.
+            if (expectedTurnContext && gameId) {
+                const liveCtx = getCurrentTurnContext();
+                if (expectedTurnContext.token !== liveCtx.token) {
+                    return;
+                }
+            }
+            clearPendingAdvanceTimer();
             window.turnTransitionInProgress = true;
             
             // During multiplayer handoff, keep input blocked until endTurn() atomically
@@ -4367,10 +4409,20 @@ Industrial Age\tFuture steam punk gear\t500`;
                         window.turnTransitionInProgress = false;
                     }
                 }, 12000);
-                endTurn(function() {
-                    clearTimeout(turnTransitionTimeout);
-                    window.turnTransitionInProgress = false;
-                });
+                const ctx = expectedTurnContext || getCurrentTurnContext();
+                let attempts = 0;
+                const attemptCommit = function() {
+                    endTurn(ctx, function(result) {
+                        if (result && !result.committed && !result.alreadyAdvanced && attempts < 2) {
+                            attempts++;
+                            setTimeout(attemptCommit, 250);
+                            return;
+                        }
+                        clearTimeout(turnTransitionTimeout);
+                        window.turnTransitionInProgress = false;
+                    });
+                };
+                attemptCommit();
             } else {
                 // Single player: Advance to next player, skipping any with skipNextTurn
                 advanceToNextPlayerSingle(() => {
@@ -6717,6 +6769,10 @@ function listenForTurn() {
       // MULTIPLAYER TURN UI: Firebase currentPlayerId is the single source of truth.
       const isMyClientTurn = currentPlayerId === clientId;
       const turnCount = gameData.turnCount || 0;
+      const liveTurnToken = getTurnTokenFromState(currentPlayerId, turnCount);
+      if (window.pendingAdvanceTurnToken && window.pendingAdvanceTurnToken !== liveTurnToken) {
+          clearPendingAdvanceTimer();
+      }
       // Show "Your Turn" only at the START of a turn (before roll). Never re-show after they've rolled (processingMove would be true).
       const shouldShowYourTurnModal = isMyClientTurn && !gameState.processingMove && (
           lastPlayerIdForTurnModal !== currentPlayerId || turnCount !== lastShownTurnCountForModal
@@ -6801,9 +6857,13 @@ function updateInventory(treasure) {
   });
 }
 
-function endTurn(onComplete) {
+function endTurn(expectedTurnContext, onComplete) {
+  if (typeof expectedTurnContext === "function") {
+    onComplete = expectedTurnContext;
+    expectedTurnContext = null;
+  }
   if (!gameId) {
-    if (onComplete) onComplete();
+    if (onComplete) onComplete({ committed: true, alreadyAdvanced: false });
     return;
   }
   const stateRef = db.ref(`/games/${gameId}/state`);
@@ -6823,6 +6883,14 @@ function endTurn(onComplete) {
     // Only active player can advance; abort transaction if not this client's turn.
     if (firebaseCurrentPlayerId !== clientId) {
       return;
+    }
+    // Strict turn context check: only advance the exact turn we scheduled.
+    if (expectedTurnContext) {
+      const expectedPlayerId = expectedTurnContext.playerId;
+      const expectedTurnCount = expectedTurnContext.turnCount;
+      if (firebaseCurrentPlayerId !== expectedPlayerId || (state.turnCount || 0) !== expectedTurnCount) {
+        return;
+      }
     }
 
     // Normalize turn order to active players each time.
@@ -6885,14 +6953,22 @@ function endTurn(onComplete) {
   }, (error, committed, snapshot) => {
     if (error) {
       console.error("endTurn transaction failed:", error);
-      if (onComplete) onComplete();
+      if (onComplete) onComplete({ committed: false, alreadyAdvanced: false, error: error });
       return;
     }
 
     if (!committed) {
       // Common abort reasons: not this client's turn anymore, or state invalid.
       console.warn("endTurn transaction not committed (likely stale turn owner).");
-      if (onComplete) onComplete();
+      let alreadyAdvanced = false;
+      const snapState = snapshot && snapshot.val ? (snapshot.val() || {}) : {};
+      if (expectedTurnContext && snapState) {
+        const liveTurnCount = Number.isFinite(snapState.turnCount) ? snapState.turnCount : 0;
+        const liveCurrentPlayerId = snapState.currentPlayerId || null;
+        alreadyAdvanced = liveTurnCount > expectedTurnContext.turnCount ||
+          (liveCurrentPlayerId && liveCurrentPlayerId !== expectedTurnContext.playerId);
+      }
+      if (onComplete) onComplete({ committed: false, alreadyAdvanced: alreadyAdvanced });
       return;
     }
 
@@ -6905,8 +6981,8 @@ function endTurn(onComplete) {
     waitingMessage.textContent = `Waiting for ${nextPlayerName}'s turn...`;
     waitingModal.style.display = "block";
     rollButton.disabled = true;
-    if (onComplete) onComplete();
-  });
+    if (onComplete) onComplete({ committed: true, alreadyAdvanced: false });
+  }, false);
 }
 
 function showToastIfCurrentPlayer(message) {
